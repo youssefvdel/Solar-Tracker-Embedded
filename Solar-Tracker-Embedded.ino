@@ -60,10 +60,15 @@ static constexpr uint8_t SERVO_STOP = 90;
 static constexpr uint8_t SERVO_CW_SLOW = 75;   // Rotate clockwise (slow)
 static constexpr uint8_t SERVO_CCW_SLOW = 105; // Rotate counter-clockwise (slow)
 
+// Servo calibration: adjust this if the servo drifts at "stop"
+// Positive = stops later (e.g., 92), Negative = stops earlier (e.g., 88)
+static constexpr int8_t SERVO_TRIM = 0;
+static constexpr uint8_t SERVO_STOP_REAL = 90 + SERVO_TRIM;
+
 // ─── LDR Calibration ─────────────────────────────────────────
 static constexpr uint8_t LDR_SAMPLES = 16;       // Oversample count
-static constexpr uint16_t LDR_THRESHOLD = 50;    // Min diff to trigger movement
-static constexpr uint16_t LDR_DEADZONE = 20;     // Ignore small differences
+static constexpr uint16_t LDR_THRESHOLD = 200;   // Min diff to trigger movement (raised for indoor noise)
+static constexpr uint16_t LDR_DEADZONE = 100;     // Ignore small differences (raised for stability)
 static constexpr uint16_t NIGHT_THRESHOLD = 300; // Below this on both LDRs = night
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────
@@ -86,6 +91,12 @@ SystemState currentState = STATE_ACTIVE;
 // LDR values (ADC 0-4095 → uint16_t, not uint8_t which truncates to 255)
 uint16_t ldrLeft = 0;
 uint16_t ldrRight = 0;
+
+// Rolling average buffers (smooths remaining noise after oversampling)
+static constexpr uint8_t LDR_AVG_WINDOW = 5;
+uint16_t ldrLeftBuf[LDR_AVG_WINDOW] = {0};
+uint16_t ldrRightBuf[LDR_AVG_WINDOW] = {0};
+uint8_t ldrBufIndex = 0;
 
 // Timing variables (millis() returns uint32_t / unsigned long)
 uint32_t lastLDRRead = 0;
@@ -567,7 +578,7 @@ void trackSun() {
   if (currentMode != MODE_AUTO) return;
   int16_t diff = static_cast<int16_t>(ldrLeft - ldrRight);
   if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
-    sunServo.write(SERVO_STOP);
+    sunServo.write(SERVO_STOP_REAL);
   } else if (diff > static_cast<int16_t>(LDR_THRESHOLD)) {
     sunServo.write(SERVO_CW_SLOW);
   } else if (diff < -static_cast<int16_t>(LDR_THRESHOLD)) {
@@ -629,14 +640,15 @@ void setup() {
   }
 
   sunServo.attach(PIN_SERVO);
-  sunServo.write(SERVO_STOP);
+  sunServo.write(SERVO_STOP_REAL);
   Serial.println("Servo ready.");
 
   ldrLeft = readLDR(PIN_LDR_LEFT);
   ldrRight = readLDR(PIN_LDR_RIGHT);
   Serial.printf("LDR — Left: %u | Right: %u\n", ldrLeft, ldrRight);
 
-  if (isNight()) {
+  // DISABLED FOR INDOOR TESTING
+  if (false && isNight()) {
     Serial.println("No sunlight detected — entering deep sleep.");
     currentState = STATE_NIGHT_SLEEP;
     goToSleep();
@@ -656,14 +668,31 @@ void loop() {
 
   if (now - lastLDRRead >= INTERVAL_LDR) {
     lastLDRRead = now;
-    ldrLeft = readLDR(PIN_LDR_LEFT);
-    ldrRight = readLDR(PIN_LDR_RIGHT);
+
+    // Raw reading (16x oversampled)
+    uint16_t rawLeft = readLDR(PIN_LDR_LEFT);
+    uint16_t rawRight = readLDR(PIN_LDR_RIGHT);
+
+    // Rolling average (smooths remaining noise)
+    ldrLeftBuf[ldrBufIndex] = rawLeft;
+    ldrRightBuf[ldrBufIndex] = rawRight;
+    ldrBufIndex = (ldrBufIndex + 1) % LDR_AVG_WINDOW;
+
+    uint32_t sumLeft = 0, sumRight = 0;
+    for (uint8_t i = 0; i < LDR_AVG_WINDOW; i++) {
+      sumLeft += ldrLeftBuf[i];
+      sumRight += ldrRightBuf[i];
+    }
+    ldrLeft = sumLeft / LDR_AVG_WINDOW;
+    ldrRight = sumRight / LDR_AVG_WINDOW;
+
     Serial.printf("L: %4u | R: %4u | Diff: %+d\n",
                   ldrLeft, ldrRight,
                   static_cast<int16_t>(ldrLeft - ldrRight));
   }
 
-  if (currentState == STATE_ACTIVE && isNight()) {
+  // DISABLED FOR INDOOR TESTING
+  if (currentState == STATE_ACTIVE && false && isNight()) {
     Serial.println("Night detected — entering deep sleep.");
     currentState = STATE_NIGHT_SLEEP;
     goToSleep();
@@ -681,7 +710,7 @@ void loop() {
     if (currentMode == MODE_AUTO) {
       trackSun();
     } else {
-      sunServo.write(SERVO_STOP);
+      sunServo.write(SERVO_STOP_REAL);
     }
   }
 

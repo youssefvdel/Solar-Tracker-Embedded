@@ -1,10 +1,10 @@
-# 📱 BLE Integration — Brainstorm & Design
+# BLE Integration — Brainstorm & Design
 
 Bluetooth Low Energy (BLE) for the Sun Tracker. Not a gimmick — a showcase feature.
 
 ---
 
-## 🎯 The Goal
+## The Goal
 
 **Demo scenario:** Walk up to the tracker, open your phone, and instantly see:
 - Real-time LDR readings (live graph)
@@ -17,7 +17,7 @@ All without touching the hardware. Professors love remote monitoring demos.
 
 ---
 
-## 💡 BLE Use Cases (Ranked by Impact)
+## BLE Use Cases (Ranked by Impact)
 
 ### 1. Remote Monitoring Dashboard ⭐⭐⭐⭐⭐
 **What:** Phone app reads BLE characteristics showing live sensor data.
@@ -103,7 +103,7 @@ All without touching the hardware. Professors love remote monitoring demos.
 
 ---
 
-## 🏆 Recommended: What to Actually Build
+## Recommended: What to Actually Build
 
 **Phase 2.4 (Core BLE):** Implement Use Cases 1 + 3
 
@@ -122,7 +122,7 @@ All without touching the hardware. Professors love remote monitoring demos.
 
 ---
 
-## 📱 How the Demo Works
+## How the Demo Works
 
 ### Setup
 1. Upload firmware with BLE enabled
@@ -148,7 +148,7 @@ All without touching the hardware. Professors love remote monitoring demos.
 
 ---
 
-## 🔧 Technical Design
+## Technical Design
 
 ### BLE Service UUIDs
 
@@ -194,7 +194,7 @@ All without touching the hardware. Professors love remote monitoring demos.
 
 ---
 
-## 📋 Implementation Checklist
+## Implementation Checklist
 
 ### Phase 2.4 — Core BLE
 - [ ] Include `BLEDevice.h`, `BLEServer.h`, `BLEUtils.h`, `BLE2902.h`
@@ -216,7 +216,7 @@ All without touching the hardware. Professors love remote monitoring demos.
 
 ---
 
-## 🎓 Why This Impresses Professors
+## Why This Impresses Professors
 
 1. **Standards compliance** — Using standard BLE Battery Service UUID shows you know BLE specifications, not just hacking around
 2. **Two-way communication** — Not just reading sensors, but controlling the device remotely

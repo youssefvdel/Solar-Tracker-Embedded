@@ -1,4 +1,4 @@
-# 🔌 Wiring Guide
+# Wiring Guide
 
 Complete wiring reference for the Sun Tracker project. All connections use the ESP32 as the central controller.
 
@@ -63,7 +63,7 @@ ESP32 GPIO 12 ─────→ Servo Orange (Signal/PWM)
 Common GND ──────────→ Servo Brown (GND)
 ```
 
-### ⚠️ Important
+### Important
 - **Do NOT power the servo from ESP32 5V pin** — it can draw up to 2.5A at stall
 - Use the **TP4056 boost converter output** (set to 5V) for servo VCC
 - Ensure **common GND** between ESP32, servo, and power supply

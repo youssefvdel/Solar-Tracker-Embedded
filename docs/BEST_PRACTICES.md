@@ -1,10 +1,10 @@
-# 📘 Embedded Firmware Best Practices
+# Embedded Firmware Best Practices
 
 A living reference for writing clean, efficient, and reliable embedded firmware on the ESP32. Written for the Sun Tracker team — use it, share it, improve it.
 
 ---
 
-## 📐 Table of Contents
+## Table of Contents
 
 1. [Types & Data](#1-types--data)
 2. [Constants & Magic Numbers](#2-constants--magic-numbers)
@@ -25,25 +25,25 @@ A living reference for writing clean, efficient, and reliable embedded firmware 
 
 ### Rule: Always use fixed-width types. Never use bare `int`.
 
-| Type | Size | Use For |
-|------|------|---------|
-| `uint8_t` | 1 byte | Pin numbers (0–39), loop counters < 256, byte flags, servo values (0–180) |
-| `uint16_t` | 2 bytes | ADC readings (0–4095), timing intervals, sensor values |
-| `uint32_t` | 4 bytes | `millis()` timestamps, large counters, frequencies |
-| `uint64_t` | 8 bytes | Deep sleep timers (microseconds), large totals |
-| `int16_t` | 2 bytes | Signed differences (LDR delta: −4095 to +4095) |
-| `int32_t` | 4 bytes | Signed large values, temperature ×100 |
-| `bool` | 1 byte | True/false flags |
+| Type       | Size    | Use For                                                                   |
+| ---------- | ------- | ------------------------------------------------------------------------- |
+| `uint8_t`  | 1 byte  | Pin numbers (0–39), loop counters < 256, byte flags, servo values (0–180) |
+| `uint16_t` | 2 bytes | ADC readings (0–4095), timing intervals, sensor values                    |
+| `uint32_t` | 4 bytes | `millis()` timestamps, large counters, frequencies                        |
+| `uint64_t` | 8 bytes | Deep sleep timers (microseconds), large totals                            |
+| `int16_t`  | 2 bytes | Signed differences (LDR delta: −4095 to +4095)                            |
+| `int32_t`  | 4 bytes | Signed large values, temperature ×100                                     |
+| `bool`     | 1 byte  | True/false flags                                                          |
 
 ### Why?
 
 ```cpp
-// ❌ BAD — ambiguous, wastes memory
+// BAD — ambiguous, wastes memory
 int pin = 12;       // 4 bytes for a value that fits in 1
 int ldr = analogRead(34);  // 4 bytes, but ADC is 12-bit (0-4095)
 int diff = left - right;   // What if this goes negative?
 
-// ✅ GOOD — explicit, self-documenting
+// GOOD — explicit, self-documenting
 uint8_t pin = 12;       // 1 byte, clearly a pin number
 uint16_t ldr = analogRead(34);  // 2 bytes, fits ADC range
 int16_t diff = left - right;    // 2 bytes, handles negative
@@ -60,12 +60,12 @@ On Arduino Uno, `int` is 2 bytes. On ESP32, `int` is **4 bytes** (same as `long`
 ### Rule: No magic numbers. Every constant has a named identifier.
 
 ```cpp
-// ❌ BAD — what does 50 mean?
+// BAD — what does 50 mean?
 if (abs(diff) > 50) {
   servo.write(90);
 }
 
-// ✅ GOOD — intent is clear
+// GOOD — intent is clear
 static constexpr uint16_t LDR_THRESHOLD = 50;
 static constexpr uint8_t  SERVO_STOP    = 90;
 
@@ -77,16 +77,17 @@ if (abs(diff) > LDR_THRESHOLD) {
 ### Use `static constexpr` over `#define`
 
 ```cpp
-// ❌ BAD — preprocessor macro, no type safety, no scope
+// BAD — preprocessor macro, no type safety, no scope
 #define PIN_LED 13
 #define MAX_TEMP 100
 
-// ✅ GOOD — type-safe, debugger-friendly, respects namespaces
+// GOOD — type-safe, debugger-friendly, respects namespaces
 static constexpr uint8_t PIN_LED   = 13;
 static constexpr uint8_t MAX_TEMP  = 100;
 ```
 
 **Why `constexpr` wins:**
+
 - Compiler knows the type → catches mismatches at compile time
 - Shows up in debugger (macros don't)
 - Respects C++ scope rules (can be inside `namespace` or `class`)
@@ -99,7 +100,7 @@ static constexpr uint8_t MAX_TEMP  = 100;
 ### Rule: Use `millis()` for all timing. `delay()` blocks everything.
 
 ```cpp
-// ❌ BAD — CPU is frozen for 1000ms. Buttons? Servo? OLED? All dead.
+// BAD — CPU is frozen for 1000ms. Buttons? Servo? OLED? All dead.
 void loop() {
   readSensor();
   delay(1000);
@@ -107,7 +108,7 @@ void loop() {
   delay(500);
 }
 
-// ✅ GOOD — everything runs concurrently
+// GOOD — everything runs concurrently
 static constexpr uint32_t INTERVAL_SENSOR = 1000;
 static constexpr uint32_t INTERVAL_DISPLAY = 500;
 uint32_t lastSensor = 0;
@@ -129,11 +130,13 @@ void loop() {
 ```
 
 ### How `millis()` works:
+
 - Returns milliseconds since boot (`uint32_t`, max ~49.7 days)
 - Wraps around to 0 after overflow — but `now - last >= interval` still works correctly due to unsigned arithmetic
 - Resolution: 1 ms
 
 ### When `delay()` IS acceptable:
+
 - Very short waits (< 200ms) in `setup()` or one-time operations
 - Debounce confirmation after edge detection
 - Letting hardware settle (e.g., OLED before `esp_deep_sleep_start()`)
@@ -147,37 +150,39 @@ void loop() {
 ### Rule: No `malloc`, no `new`, no `delete`. Use static allocation.
 
 ### Why heap allocation is dangerous in embedded:
-| Problem | Description |
-|---------|-------------|
-| **Fragmentation** | Repeated alloc/free creates gaps → out-of-memory despite free RAM |
-| **No recovery** | `malloc` returns NULL on failure — easy to forget to check |
-| **Leaks** | Forgotten `free` = permanent memory loss (no GC in C++) |
-| **Non-deterministic** | Allocation time varies — bad for real-time systems |
+
+| Problem               | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| **Fragmentation**     | Repeated alloc/free creates gaps → out-of-memory despite free RAM |
+| **No recovery**       | `malloc` returns NULL on failure — easy to forget to check        |
+| **Leaks**             | Forgotten `free` = permanent memory loss (no GC in C++)           |
+| **Non-deterministic** | Allocation time varies — bad for real-time systems                |
 
 ### ESP32 SRAM Layout:
-| Region | Size | Purpose |
-|--------|------|---------|
-| Static RAM | ~290 KB | Global/static variables |
-| Stack | ~8 KB per task | Local variables, function calls |
-| Heap | ~200 KB | Dynamic allocation (avoid!) |
+
+| Region     | Size           | Purpose                         |
+| ---------- | -------------- | ------------------------------- |
+| Static RAM | ~290 KB        | Global/static variables         |
+| Stack      | ~8 KB per task | Local variables, function calls |
+| Heap       | ~200 KB        | Dynamic allocation (avoid!)     |
 
 ### Best practices:
 
 ```cpp
-// ❌ BAD — heap allocation
+// BAD — heap allocation
 void process() {
   int* buffer = new int[256];  // Heap! Fragmentation risk.
   // ...
   delete[] buffer;  // Easy to forget
 }
 
-// ✅ GOOD — stack allocation (automatic cleanup)
+// GOOD — stack allocation (automatic cleanup)
 void process() {
   uint16_t buffer[256];  // Stack — freed when function returns
   // ...
 }
 
-// ✅ GOOD — static allocation (lifetime = entire program)
+// GOOD — static allocation (lifetime = entire program)
 static uint16_t sensorBuffer[256];  // Global, no allocation overhead
 
 void process() {
@@ -203,30 +208,30 @@ static ButtonState btnStates[6];  // Initialized to zero, persists forever
 
 ### ESP32 Sleep Modes
 
-| Mode | Current | CPU | RAM | Wi-Fi | Wake Sources |
-|------|---------|-----|-----|-------|-------------|
-| **Active** | 20–240 mA | ✅ Running | ✅ Retained | ✅ On | — |
-| **Modem Sleep** | 20–68 mA | ✅ Running | ✅ Retained | 🔄 Cycled | — |
-| **Light Sleep** | ~0.8 mA | ⏸ Paused | ✅ Retained | ❌ Off | GPIO, Timer, UART |
-| **Deep Sleep** | 6–150 µA | ❌ Off | ❌ Lost | ❌ Off | RTC Timer, RTC GPIO, Touch |
-| **Hibernation** | ~5 µA | ❌ Off | ❌ Lost | ❌ Off | RTC Timer only |
+| Mode            | Current   | CPU      | RAM      | Wi-Fi  | Wake Sources               |
+| --------------- | --------- | -------- | -------- | ------ | -------------------------- |
+| **Active**      | 20–240 mA | Running  | Retained | On     | —                          |
+| **Modem Sleep** | 20–68 mA  | Running  | Retained | Cycled | —                          |
+| **Light Sleep** | ~0.8 mA   | ⏸ Paused | Retained | Off    | GPIO, Timer, UART          |
+| **Deep Sleep**  | 6–150 µA  | Off      | Lost     | Off    | RTC Timer, RTC GPIO, Touch |
+| **Hibernation** | ~5 µA     | Off      | Lost     | Off    | RTC Timer only             |
 
 **Power reduction:** Deep sleep uses **~1/1000th** the power of active mode.
 
 ### Deep Sleep Best Practices
 
 ```cpp
-// ✅ Timer wake: check conditions periodically
+// Timer wake: check conditions periodically
 esp_sleep_enable_timer_wakeup(30 * 60ULL * 1000000ULL); // 30 minutes
 
-// ✅ GPIO wake: button press wakes immediately
+// GPIO wake: button press wakes immediately
 esp_sleep_enable_ext0_wakeup(GPIO_NUM_4, LOW);
 
-// ✅ Multiple GPIO wake (more efficient than ext0)
+// Multiple GPIO wake (more efficient than ext0)
 esp_sleep_enable_ext1_wakeup(BIT(GPIO_NUM_4) | BIT(GPIO_NUM_13),
                               ESP_EXT1_WAKEUP_ALL_LOW);
 
-// ⚠️ Before sleeping — clean up!
+// Before sleeping — clean up!
 servo.detach();           // Stop PWM output
 digitalWrite(LED, LOW);   // Turn off peripherals
 delay(500);               // Let hardware settle
@@ -235,21 +240,21 @@ esp_deep_sleep_start();   // Never returns — full reset on wake
 
 ### Wake Sources Comparison
 
-| Method | Current | Best For |
-|--------|---------|----------|
-| Timer only | 6–10 µA | Periodic sensor checks |
-| Ext0 (1 GPIO) | 50–100 µA | Single button wake |
-| Ext1 (multi GPIO) | ~10 µA | Multiple buttons |
-| Touch | ~30 µA | Capacitive touch |
-| ULP coprocessor | ~100 µA (1% duty) | Smart wake on sensor threshold |
+| Method            | Current           | Best For                       |
+| ----------------- | ----------------- | ------------------------------ |
+| Timer only        | 6–10 µA           | Periodic sensor checks         |
+| Ext0 (1 GPIO)     | 50–100 µA         | Single button wake             |
+| Ext1 (multi GPIO) | ~10 µA            | Multiple buttons               |
+| Touch             | ~30 µA            | Capacitive touch               |
+| ULP coprocessor   | ~100 µA (1% duty) | Smart wake on sensor threshold |
 
 ### Power Budget Example (Sun Tracker)
 
-| State | Current | Hours/Day | Energy/Day |
-|-------|---------|-----------|------------|
-| Active (tracking) | 150 mA | 8 | 1200 mAh |
-| Deep sleep (night) | 50 µA | 16 | 0.8 mAh |
-| **Total** | | | **~1201 mAh** |
+| State              | Current | Hours/Day | Energy/Day    |
+| ------------------ | ------- | --------- | ------------- |
+| Active (tracking)  | 150 mA  | 8         | 1200 mAh      |
+| Deep sleep (night) | 50 µA   | 16        | 0.8 mAh       |
+| **Total**          |         |           | **~1201 mAh** |
 
 With a 2500 mAh 18650 → **~2 days autonomy** without sun.
 
@@ -259,12 +264,12 @@ With a 2500 mAh 18650 → **~2 days autonomy** without sun.
 
 ### ESP32 ADC Quirks
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| **Noise** | WiFi interference, shared ground | Oversample + hardware filter |
-| **Non-linearity** | ESP32 ADC is inherently non-linear | Calibrate with known voltages |
-| **Input-only pins** | GPIO 34–39 have no pull-up/pull-down | Use voltage divider |
-| **Attenuation** | Default range 0–1.1V (not 0–3.3V) | Set `adcAttachPin()` or use voltage divider |
+| Issue               | Cause                                | Solution                                    |
+| ------------------- | ------------------------------------ | ------------------------------------------- |
+| **Noise**           | WiFi interference, shared ground     | Oversample + hardware filter                |
+| **Non-linearity**   | ESP32 ADC is inherently non-linear   | Calibrate with known voltages               |
+| **Input-only pins** | GPIO 34–39 have no pull-up/pull-down | Use voltage divider                         |
+| **Attenuation**     | Default range 0–1.1V (not 0–3.3V)    | Set `adcAttachPin()` or use voltage divider |
 
 ### Hardware: Voltage Divider + Capacitor
 
@@ -292,11 +297,13 @@ uint16_t readLDR(uint8_t pin) {
 ```
 
 ### Why oversampling works:
+
 - Random noise averages toward zero
 - 4 samples → ~2× improvement, 16 samples → ~4×, 64 samples → ~8×
 - Diminishing returns — 16 is the sweet spot for most applications
 
 ### Best Practice Checklist:
+
 - [ ] Use voltage divider with appropriate resistor value
 - [ ] Add 0.1µF capacitor at ADC input
 - [ ] Oversample (16× recommended)
@@ -313,14 +320,14 @@ uint16_t readLDR(uint8_t pin) {
 Every embedded system is a state machine. Make it **explicit**, not implicit.
 
 ```cpp
-// ❌ BAD — implicit states scattered as boolean flags
+// BAD — implicit states scattered as boolean flags
 bool isTracking = true;
 bool isNight = false;
 bool isCalibrating = false;
 
-// ✅ GOOD — explicit enum, one source of truth
-enum SystemMode  { MODE_AUTO, MODE_MANUAL, MODE_OFF };
-enum SystemState { STATE_ACTIVE, STATE_NIGHT_SLEEP };
+// GOOD — explicit enum, one source of truth
+enum SystemMode  { MODE_AUTO, MODE_MANUAL, MODE_STANDBY };
+enum SystemState { STATE_ACTIVE, STATE_NIGHT_SLEEP, STATE_FORCED_SLEEP };
 
 SystemMode  currentMode  = MODE_AUTO;
 SystemState currentState = STATE_ACTIVE;
@@ -331,7 +338,7 @@ SystemState currentState = STATE_ACTIVE;
 Document allowed transitions:
 
 ```
-MODE_AUTO ──[btn]──→ MODE_MANUAL ──[btn]──→ MODE_OFF ──[btn]──→ MODE_AUTO
+MODE_AUTO ──[menu]──→ MODE_MANUAL ──[menu]──→ MODE_STANDBY ──[menu]──→ MODE_AUTO
    │                                           │
    └──[night]──→ STATE_NIGHT_SLEEP ──[day]──→ (wakes to MODE_AUTO)
 ```
@@ -350,7 +357,7 @@ void handleModeTransition() {
       handleManualInput();
       break;
 
-    case MODE_OFF:
+    case MODE_STANDBY:
       sunServo.write(SERVO_STOP);
       break;
   }
@@ -358,6 +365,7 @@ void handleModeTransition() {
 ```
 
 ### Benefits:
+
 - All states visible at a glance
 - Impossible states are impossible to reach
 - Easy to add logging/debugging per state
@@ -370,6 +378,7 @@ void handleModeTransition() {
 ### Rule: Always debounce. Always poll with `millis()`.
 
 ### Mechanical Bouncing:
+
 When you press a button, the contacts physically bounce for 10–50ms, creating dozens of rapid HIGH/LOW transitions. Without debouncing, one press = 20+ events.
 
 ### Software Debounce Pattern:
@@ -399,10 +408,10 @@ bool readButton(uint8_t pin, uint8_t btnIndex) {
 
 ### Why NOT interrupts for buttons?
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Polling + debounce** | Simple, reliable, no ISR complexity | Tiny CPU overhead (negligible on 240MHz) |
-| **`attachInterrupt()`** | Zero polling overhead | ISRs can't use `delay()`, `Serial`, or `malloc`; debouncing in ISR is complex; ESP32 GPIO interrupt limitations |
+| Approach                | Pros                                | Cons                                                                                                            |
+| ----------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Polling + debounce**  | Simple, reliable, no ISR complexity | Tiny CPU overhead (negligible on 240MHz)                                                                        |
+| **`attachInterrupt()`** | Zero polling overhead               | ISRs can't use `delay()`, `Serial`, or `malloc`; debouncing in ISR is complex; ESP32 GPIO interrupt limitations |
 
 **Verdict:** Poll every 20ms. On a 240 MHz CPU, checking 6 buttons takes ~1 µs. The complexity of interrupts is not worth it.
 
@@ -414,24 +423,24 @@ bool readButton(uint8_t pin, uint8_t btnIndex) {
 
 ### Naming Conventions
 
-| Element | Style | Example |
-|---------|-------|---------|
-| Macros / `constexpr` | `SCREAMING_SNAKE_CASE` | `PIN_LED`, `MAX_TEMP` |
-| Types / Enums | `PascalCase` | `SystemMode`, `ButtonState` |
-| Functions | `camelCase` | `readLDR()`, `updateDisplay()` |
-| Variables | `camelCase` | `ldrLeft`, `lastSensor` |
-| Private members | `_camelCase` | `_calibrated` |
-| Pin constants | `PIN_` prefix | `PIN_SERVO`, `PIN_LDR_LEFT` |
+| Element              | Style                  | Example                        |
+| -------------------- | ---------------------- | ------------------------------ |
+| Macros / `constexpr` | `SCREAMING_SNAKE_CASE` | `PIN_LED`, `MAX_TEMP`          |
+| Types / Enums        | `PascalCase`           | `SystemMode`, `ButtonState`    |
+| Functions            | `camelCase`            | `readLDR()`, `updateDisplay()` |
+| Variables            | `camelCase`            | `ldrLeft`, `lastSensor`        |
+| Private members      | `_camelCase`           | `_calibrated`                  |
+| Pin constants        | `PIN_` prefix          | `PIN_SERVO`, `PIN_LDR_LEFT`    |
 
 ### Function Design
 
 ```cpp
-// ✅ One function, one responsibility
+// One function, one responsibility
 uint16_t readLDR(uint8_t pin);      // Reads and averages
 void updateDisplay();                // Updates OLED only
 void trackSun();                     // Compares LDRs, moves servo
 
-// ❌ Don't mix concerns in one function
+// Don't mix concerns in one function
 void doEverything() {
   readLDR();
   moveServo();
@@ -444,20 +453,20 @@ void doEverything() {
 ### Comments: Explain WHY, not WHAT
 
 ```cpp
-// ❌ BAD — restates the code
+// BAD — restates the code
 servo.write(90);  // Write 90 to servo
 
-// ✅ GOOD — explains the reasoning
+// GOOD — explains the reasoning
 servo.write(SERVO_STOP);  // Center = stop for 360° continuous rotation servo
 ```
 
 ### No `goto`, no recursion (unbounded), no variable-length arrays
 
 ```cpp
-// ❌ BAD
+// BAD
 int buffer[n];  // VLA — not standard C++, stack overflow risk
 
-// ✅ GOOD
+// GOOD
 static constexpr uint8_t MAX_BUFFER = 256;
 uint16_t buffer[MAX_BUFFER];  // Compile-time known size
 ```
@@ -488,16 +497,17 @@ Sun_Tracker/
 
 ### Separation of Concerns:
 
-| Module | Responsible For |
-|--------|----------------|
-| `sensors` | Reading LDRs, averaging, calibration data |
-| `actuator` | Servo attach/detach, speed control, stop |
-| `display` | OLED init, layout, rendering |
-| `input` | Button debouncing, event detection |
-| `power` | Sleep modes, wake sources, battery monitoring |
-| `main` | State machine, event routing, timing |
+| Module     | Responsible For                               |
+| ---------- | --------------------------------------------- |
+| `sensors`  | Reading LDRs, averaging, calibration data     |
+| `actuator` | Servo attach/detach, speed control, stop      |
+| `display`  | OLED init, layout, rendering                  |
+| `input`    | Button debouncing, event detection            |
+| `power`    | Sleep modes, wake sources, battery monitoring |
+| `main`     | State machine, event routing, timing          |
 
 ### Why this matters:
+
 - **Testable** — you can test `readLDR()` independently of the servo
 - **Reusable** — `sensors.cpp` works in any project with LDRs
 - **Readable** — finding button code? Go to `input.cpp`
@@ -510,20 +520,20 @@ Sun_Tracker/
 ### Serial at 115200, not 9600
 
 ```cpp
-Serial.begin(115200);  // ✅ ESP32 standard — fast, no bottleneck
-// Serial.begin(9600); // ❌ Arduino legacy — painfully slow on ESP32
+Serial.begin(115200);  // ESP32 standard — fast, no bottleneck
+// Serial.begin(9600); // Arduino legacy — painfully slow on ESP32
 ```
 
 ### Structured Logging
 
 ```cpp
-// ✅ Clear, parseable format
+// Clear, parseable format
 Serial.printf("L: %4u | R: %4u | Diff: %+d | Mode: %s\n",
               ldrLeft, ldrRight,
               static_cast<int16_t>(ldrLeft - ldrRight),
               modeStr);
 
-// ❌ Unstructured
+// Unstructured
 Serial.print("left is ");
 Serial.print(ldrLeft);
 Serial.print(" and right is ");
@@ -563,7 +573,7 @@ void loop() {
 ### Initialize Everything
 
 ```cpp
-// ✅ Explicit initialization
+// Explicit initialization
 void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);  // Start silent
@@ -587,7 +597,7 @@ if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
 ### Never Trust External Input
 
 ```cpp
-// ✅ Validate before using
+// Validate before using
 uint16_t ldr = readLDR(PIN_LDR_LEFT);
 if (ldr > 4095) ldr = 4095;  // ADC should never exceed this, but just in case
 ```
@@ -628,7 +638,7 @@ void runSelfTest() {
 
 ---
 
-## 📚 Quick Reference Card
+## Quick Reference Card
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -667,4 +677,4 @@ void runSelfTest() {
 
 ---
 
-*Last updated: 2026-04-14 | For the Sun Tracker team — BUE Embedded Systems*
+_Last updated: 2026-04-14 | For the Sun Tracker team — BUE Embedded Systems_

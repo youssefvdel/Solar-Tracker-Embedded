@@ -1,4 +1,4 @@
-# 💡 Embedded C++ Quick Concepts
+# Embedded C++ Quick Concepts
 
 Answers to the most common *"wait, what does this actually do?"* moments. Written for the Sun Tracker team — keep it open while reading code.
 
@@ -47,7 +47,7 @@ Read as: "action is a pointer to a function that takes nothing and returns nothi
 currentMenu[menuIndex].action(); // Calls whatever function is stored there
 ```
 
-**✅ Key Takeaway:** Function pointers let data drive behavior. Clean, scalable, zero `if/else` soup.
+**Key Takeaway:** Function pointers let data drive behavior. Clean, scalable, zero `if/else` soup.
 
 ---
 
@@ -76,7 +76,7 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 // Passes the actual TwoWire I2C instance, not a copy
 ```
 
-**✅ Key Takeaway:** `&` = "use the real thing, don't copy it". Required when libraries need hardware access.
+**Key Takeaway:** `&` = "use the real thing, don't copy it". Required when libraries need hardware access.
 
 ---
 
@@ -124,7 +124,7 @@ esp_sleep_enable_timer_wakeup(
 );
 ```
 
-**✅ Key Takeaway:** `static_cast` tells the compiler "I know what I'm doing, convert this safely". Safer than C-style `(int)x`.
+**Key Takeaway:** `static_cast` tells the compiler "I know what I'm doing, convert this safely". Safer than C-style `(int)x`.
 
 ---
 
@@ -172,11 +172,11 @@ int16_t diff = static_cast<int16_t>(ldrLeft - ldrRight);
 sunX += map(constrain(diff, -200, 200), -200, 200, -15, 15);
 ```
 
-**✅ Key Takeaway:** `constrain()` protects bounds, `map()` scales to UI space. Always constrain FIRST, then map.
+**Key Takeaway:** `constrain()` protects bounds, `map()` scales to UI space. Always constrain FIRST, then map.
 
 ---
 
-## 📋 TL;DR Cheat Card
+## TL;DR Cheat Card
 
 | Concept | Syntax | Purpose | Team Rule |
 |---------|--------|---------|-----------|

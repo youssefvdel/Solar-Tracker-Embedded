@@ -1,4 +1,4 @@
-# 📐 LDR Calibration Guide
+# LDR Calibration Guide
 
 Calibrating the LDR sensors is essential for accurate sun tracking. The threshold values determine when the servo moves and in which direction.
 

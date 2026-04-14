@@ -1,4 +1,4 @@
-# 🛠️ Setup Guide
+# Setup Guide
 
 Step-by-step instructions to get the Sun Tracker up and running.
 

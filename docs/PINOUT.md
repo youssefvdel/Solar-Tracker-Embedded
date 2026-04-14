@@ -1,4 +1,4 @@
-# 🔌 Sun Tracker — Pinout Reference
+# Sun Tracker — Pinout Reference
 
 Quick reference for all ESP32 GPIO connections. Keep this open while building the circuit.
 
@@ -63,7 +63,7 @@ TP4056 OUT+ (5V) ──→ Servo Red (VCC)
 Common GND ─────────→ Servo Brown (GND)
 ```
 
-⚠️ **Servo VCC from TP4056, NOT ESP32 5V pin.**
+**Servo VCC from TP4056, NOT ESP32 5V pin.**
 
 ---
 

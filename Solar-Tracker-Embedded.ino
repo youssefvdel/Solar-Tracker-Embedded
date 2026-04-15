@@ -67,9 +67,14 @@ static constexpr uint8_t SERVO_STOP_REAL = 90 + SERVO_TRIM;
 
 // ─── LDR Calibration ─────────────────────────────────────────
 static constexpr uint8_t LDR_SAMPLES = 16;       // Oversample count
-static constexpr uint16_t LDR_THRESHOLD = 50;   // Min diff to trigger movement (adjusted for indoor ~50-150 range)
-static constexpr uint16_t LDR_DEADZONE = 20;    // Ignore small differences (adjusted for stability)
+static constexpr uint16_t LDR_THRESHOLD = 50;   // Min diff to trigger movement
+static constexpr uint16_t LDR_DEADZONE = 20;    // Ignore small differences
 static constexpr uint16_t NIGHT_THRESHOLD = 300; // Below this on both LDRs = night
+
+// LDR offset: balances manufacturing differences between the two LDRs
+// Adjust this until Diff reads ~0 when both LDRs see the same light.
+// Positive = Left reads higher, Negative = Right reads higher
+static constexpr int16_t LDR_OFFSET = 0;
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────
 static constexpr uint32_t INTERVAL_LDR = 200;     // Read LDRs every 200ms
@@ -330,7 +335,7 @@ void updateDisplayNormal() {
   int8_t sunX = 64;
   int8_t sunY = 10;
 
-  int16_t diff = static_cast<int16_t>(ldrLeft - ldrRight);
+  int16_t diff = static_cast<int16_t>((ldrLeft + LDR_OFFSET) - ldrRight);
   sunX += map(constrain(diff, -200, 200), -200, 200, -15, 15);
 
   drawSun(sunX, sunY, sunRadius);
@@ -576,7 +581,7 @@ void actionBackToMain() {
 // ─── Helper: Sun Tracking Logic ─────────────────────────────
 void trackSun() {
   if (currentMode != MODE_AUTO) return;
-  int16_t diff = static_cast<int16_t>(ldrLeft - ldrRight);
+  int16_t diff = static_cast<int16_t>((ldrLeft + LDR_OFFSET) - ldrRight);
   if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
     sunServo.write(SERVO_STOP_REAL);
   } else if (diff > static_cast<int16_t>(LDR_THRESHOLD)) {
@@ -686,11 +691,14 @@ void loop() {
     ldrLeft = sumLeft / LDR_AVG_WINDOW;
     ldrRight = sumRight / LDR_AVG_WINDOW;
 
-    Serial.printf("L: %4u | R: %4u | Diff: %+d | Action: ",
+    Serial.printf("L: %4u | R: %4u | RawDiff: %+d | Action: ",
                   ldrLeft, ldrRight,
                   static_cast<int16_t>(ldrLeft - ldrRight));
 
-    int16_t diff = static_cast<int16_t>(ldrLeft - ldrRight);
+    // Apply offset to balance LDR manufacturing differences
+    int16_t diff = static_cast<int16_t>((ldrLeft + LDR_OFFSET) - ldrRight);
+
+    Serial.printf("AdjDiff: %+d | ", diff);
     if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
       Serial.println("HOLD (90)");
     } else if (diff > LDR_THRESHOLD) {

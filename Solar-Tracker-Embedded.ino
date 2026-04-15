@@ -42,6 +42,10 @@ static constexpr uint8_t PIN_BTN_LEFT = 4;    // Scroll up / previous
 static constexpr uint8_t PIN_BTN_RIGHT = 13;  // Scroll down / next
 static constexpr uint8_t PIN_BTN_SELECT = 15; // Confirm / enter menu
 
+// Hardware limit switches (INPUT_PULLUP, active LOW)
+static constexpr uint8_t PIN_LIMIT_RIGHT = 18; // Touches GND at right limit
+static constexpr uint8_t PIN_LIMIT_LEFT = 19;  // Touches GND at left limit
+
 // Wake-from-deep-sleep button (reuse select button)
 static constexpr uint8_t PIN_BTN_WAKE = PIN_BTN_SELECT;
 
@@ -596,21 +600,36 @@ void resetAngle() {
   Serial.println("Angle reset to 0° (center).");
 }
 
-// ─── Helper: Sun Tracking Logic (pulse-based with angle limits) ──────
+// ─── Helper: Sun Tracking Logic (pulse-based with hardware limits) ──────
 void trackSun() {
   if (currentMode != MODE_AUTO) return;
+
+  // Check hardware limit switches (active LOW)
+  bool hitRight = (digitalRead(PIN_LIMIT_RIGHT) == LOW);
+  bool hitLeft = (digitalRead(PIN_LIMIT_LEFT) == LOW);
+
+  if (hitRight) {
+    Serial.println("  -> RIGHT LIMIT HIT! Resetting to max.");
+    estimatedAngle = ANGLE_MAX;
+    sunServo.write(SERVO_STOP_REAL);
+    return;
+  }
+  if (hitLeft) {
+    Serial.println("  -> LEFT LIMIT HIT! Resetting to min.");
+    estimatedAngle = ANGLE_MIN;
+    sunServo.write(SERVO_STOP_REAL);
+    return;
+  }
 
   int16_t diff = static_cast<int16_t>((ldrLeft + LDR_OFFSET) - ldrRight);
 
   if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
-    // Centered — stop completely
     sunServo.write(SERVO_STOP_REAL);
     Serial.println("  -> HOLD (centered)");
   } else if (diff > LDR_THRESHOLD) {
-    // Left is brighter — pulse right (CW) briefly, then stop
-    // Check if we're at the CW limit
+    // Left is brighter — pulse right (CW) briefly
     if (estimatedAngle >= ANGLE_MAX) {
-      Serial.printf("  -> LIMIT REACHED (+%d°). Stopped.\n", estimatedAngle);
+      Serial.printf("  -> SOFTWARE LIMIT (+%d°). Stopped.\n", estimatedAngle);
       sunServo.write(SERVO_STOP_REAL);
       return;
     }
@@ -619,14 +638,12 @@ void trackSun() {
     sunServo.write(SERVO_CW_SLOW);
     delay(SERVO_PULSE_MS);
     sunServo.write(SERVO_STOP_REAL);
-    // Estimate angle change (CW = positive)
     estimatedAngle += static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS_CW);
     Serial.printf("  -> New angle: %d°\n", estimatedAngle);
   } else if (diff < -LDR_THRESHOLD) {
-    // Right is brighter — pulse left (CCW) briefly, then stop
-    // Check if we're at the CCW limit
+    // Right is brighter — pulse left (CCW) briefly
     if (estimatedAngle <= ANGLE_MIN) {
-      Serial.printf("  -> LIMIT REACHED (%d°). Stopped.\n", estimatedAngle);
+      Serial.printf("  -> SOFTWARE LIMIT (%d°). Stopped.\n", estimatedAngle);
       sunServo.write(SERVO_STOP_REAL);
       return;
     }
@@ -635,13 +652,11 @@ void trackSun() {
     sunServo.write(SERVO_CCW_SLOW);
     delay(SERVO_PULSE_MS);
     sunServo.write(SERVO_STOP_REAL);
-    // Estimate angle change (CCW = negative)
     estimatedAngle -= static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS_CCW);
     Serial.printf("  -> New angle: %d°\n", estimatedAngle);
   } else {
-    // WAIT: diff is between deadzone and threshold
     sunServo.write(SERVO_STOP_REAL);
-    Serial.printf("  -> WAIT (small diff, holding) | Angle: %d°\n", estimatedAngle);
+    Serial.printf("  -> WAIT (small diff) | Angle: %d°\n", estimatedAngle);
   }
 }
 
@@ -683,6 +698,10 @@ void setup() {
   pinMode(PIN_BTN_LEFT, INPUT_PULLUP);
   pinMode(PIN_BTN_RIGHT, INPUT_PULLUP);
   pinMode(PIN_BTN_SELECT, INPUT_PULLUP);
+
+  // Limit switches
+  pinMode(PIN_LIMIT_RIGHT, INPUT_PULLUP);
+  pinMode(PIN_LIMIT_LEFT, INPUT_PULLUP);
 
   Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {

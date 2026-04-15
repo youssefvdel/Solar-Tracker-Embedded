@@ -76,13 +76,14 @@ static constexpr uint16_t NIGHT_THRESHOLD = 500; // Below this on both LDRs = ni
 static constexpr uint32_t SERVO_PULSE_MS = 100;  // Move for 100ms, then stop and re-read
 
 // Servo degrees per ms of pulsing (calibration needed)
-// Typical MG996R 360°: ~0.1° per ms at medium speed
-// 100ms pulse ≈ 10° of rotation. Adjust by testing.
-static constexpr float DEGREES_PER_MS = 0.1f;
+// CW and CCW may rotate at different speeds. Adjust by testing.
+static constexpr float DEGREES_PER_MS_CW = 0.15f;   // CW rotation speed
+static constexpr float DEGREES_PER_MS_CCW = 0.08f;  // CCW rotation speed (slower)
 
 // Safe tracking range: servo stops at these limits to prevent wire damage
-static constexpr int16_t ANGLE_MIN = -180;   // Degrees from start (CCW limit)
-static constexpr int16_t ANGLE_MAX = 180;    // Degrees from start (CW limit)
+// Reduced to ±90° since your servo may only have ~90° of useful range
+static constexpr int16_t ANGLE_MIN = -90;    // Degrees from start (CCW limit)
+static constexpr int16_t ANGLE_MAX = 90;     // Degrees from start (CW limit)
 
 // Current estimated angle (degrees from starting position)
 int16_t estimatedAngle = 0;
@@ -616,8 +617,8 @@ void trackSun() {
     sunServo.write(SERVO_CW_SLOW);
     delay(SERVO_PULSE_MS);
     sunServo.write(SERVO_STOP_REAL);
-    // Estimate angle change
-    estimatedAngle += static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS);
+    // Estimate angle change (CW = positive)
+    estimatedAngle += static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS_CW);
     Serial.printf("  -> New angle: %d°\n", estimatedAngle);
   } else if (diff < -LDR_THRESHOLD) {
     // Right is brighter — pulse left (CCW) briefly, then stop
@@ -633,7 +634,7 @@ void trackSun() {
     delay(SERVO_PULSE_MS);
     sunServo.write(SERVO_STOP_REAL);
     // Estimate angle change (CCW = negative)
-    estimatedAngle -= static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS);
+    estimatedAngle -= static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS_CCW);
     Serial.printf("  -> New angle: %d°\n", estimatedAngle);
   } else {
     // WAIT: diff is between deadzone and threshold

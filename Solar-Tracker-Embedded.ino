@@ -75,6 +75,18 @@ static constexpr uint16_t NIGHT_THRESHOLD = 500; // Below this on both LDRs = ni
 // This prevents endless spinning. Adjust to control movement speed.
 static constexpr uint32_t SERVO_PULSE_MS = 100;  // Move for 100ms, then stop and re-read
 
+// Servo degrees per ms of pulsing (calibration needed)
+// Typical MG996R 360°: ~0.1° per ms at medium speed
+// 100ms pulse ≈ 10° of rotation. Adjust by testing.
+static constexpr float DEGREES_PER_MS = 0.1f;
+
+// Safe tracking range: servo stops at these limits to prevent wire damage
+static constexpr int16_t ANGLE_MIN = -180;   // Degrees from start (CCW limit)
+static constexpr int16_t ANGLE_MAX = 180;    // Degrees from start (CW limit)
+
+// Current estimated angle (degrees from starting position)
+int16_t estimatedAngle = 0;
+
 // LDR offset: balances manufacturing differences between the two LDRs
 // Adjust this until Diff reads ~0 when both LDRs see the same light.
 // Positive = Left reads higher, Negative = Right reads higher
@@ -376,15 +388,7 @@ void updateDisplayNormal() {
   }
 
   display.setCursor(0, 48);
-  if (currentMode == MODE_STANDBY) {
-    display.print("Servo: [■] STOP");
-  } else if (diff > LDR_THRESHOLD) {
-    display.print("Servo: [>>] CW");
-  } else if (diff < -LDR_THRESHOLD) {
-    display.print("Servo: [<<] CCW");
-  } else {
-    display.print("Servo: [■] HOLD");
-  }
+  display.printf("Angle: %d°", estimatedAngle);
 
   display.setCursor(0, 58);
   display.print("[SELECT] Menu");
@@ -583,7 +587,13 @@ void actionBackToMain() {
   openMenu(MAIN_MENU, MAIN_MENU_COUNT);
 }
 
-// ─── Helper: Sun Tracking Logic (pulse-based movement) ──────
+// Reset estimated angle to center (call at dawn or on startup)
+void resetAngle() {
+  estimatedAngle = 0;
+  Serial.println("Angle reset to 0° (center).");
+}
+
+// ─── Helper: Sun Tracking Logic (pulse-based with angle limits) ──────
 void trackSun() {
   if (currentMode != MODE_AUTO) return;
 
@@ -594,23 +604,41 @@ void trackSun() {
     sunServo.write(SERVO_STOP_REAL);
     Serial.println("  -> HOLD (centered)");
   } else if (diff > LDR_THRESHOLD) {
-    // Left is brighter — pulse right briefly, then stop
-    Serial.println("  -> Pulse CW (left brighter)");
+    // Left is brighter — pulse right (CW) briefly, then stop
+    // Check if we're at the CW limit
+    if (estimatedAngle >= ANGLE_MAX) {
+      Serial.printf("  -> LIMIT REACHED (+%d°). Stopped.\n", estimatedAngle);
+      sunServo.write(SERVO_STOP_REAL);
+      return;
+    }
+    Serial.printf("  -> Pulse CW (%dms) | Angle: %d° | Diff: %d\n",
+                  SERVO_PULSE_MS, estimatedAngle, diff);
     sunServo.write(SERVO_CW_SLOW);
     delay(SERVO_PULSE_MS);
     sunServo.write(SERVO_STOP_REAL);
-    Serial.println("  -> Stopped. Re-reading...");
+    // Estimate angle change
+    estimatedAngle += static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS);
+    Serial.printf("  -> New angle: %d°\n", estimatedAngle);
   } else if (diff < -LDR_THRESHOLD) {
-    // Right is brighter — pulse left briefly, then stop
-    Serial.println("  -> Pulse CCW (right brighter)");
+    // Right is brighter — pulse left (CCW) briefly, then stop
+    // Check if we're at the CCW limit
+    if (estimatedAngle <= ANGLE_MIN) {
+      Serial.printf("  -> LIMIT REACHED (%d°). Stopped.\n", estimatedAngle);
+      sunServo.write(SERVO_STOP_REAL);
+      return;
+    }
+    Serial.printf("  -> Pulse CCW (%dms) | Angle: %d° | Diff: %d\n",
+                  SERVO_PULSE_MS, estimatedAngle, diff);
     sunServo.write(SERVO_CCW_SLOW);
     delay(SERVO_PULSE_MS);
     sunServo.write(SERVO_STOP_REAL);
-    Serial.println("  -> Stopped. Re-reading...");
+    // Estimate angle change (CCW = negative)
+    estimatedAngle -= static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS);
+    Serial.printf("  -> New angle: %d°\n", estimatedAngle);
   } else {
     // WAIT: diff is between deadzone and threshold
     sunServo.write(SERVO_STOP_REAL);
-    Serial.println("  -> WAIT (small diff, holding)");
+    Serial.printf("  -> WAIT (small diff, holding) | Angle: %d°\n", estimatedAngle);
   }
 }
 

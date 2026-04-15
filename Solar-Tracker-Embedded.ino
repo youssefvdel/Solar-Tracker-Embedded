@@ -74,7 +74,7 @@ static constexpr uint16_t NIGHT_THRESHOLD = 500; // Below this on both LDRs = ni
 // LDR offset: balances manufacturing differences between the two LDRs
 // Adjust this until Diff reads ~0 when both LDRs see the same light.
 // Positive = Left reads higher, Negative = Right reads higher
-static constexpr int16_t LDR_OFFSET = 150;
+static constexpr int16_t LDR_OFFSET = 120;
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────
 static constexpr uint32_t INTERVAL_LDR = 200;     // Read LDRs every 200ms

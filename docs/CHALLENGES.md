@@ -7,6 +7,7 @@ A record of the technical challenges encountered during the development of the S
 ## 1. Serial Port Permission Denied on Linux
 
 **Symptom:**
+
 ```
 A fatal error occurred: Could not open /dev/ttyUSB0
 ([Errno 13] Permission denied: '/dev/ttyUSB0')
@@ -16,9 +17,11 @@ A fatal error occurred: Could not open /dev/ttyUSB0
 The current user was not a member of the `dialout` group, which controls access to USB-to-serial devices on Linux.
 
 **Solution:**
+
 ```bash
 sudo usermod -a -G dialout $USER
 ```
+
 Logged out and back in for the group change to take effect.
 
 **Lesson Learned:**
@@ -29,6 +32,7 @@ Linux requires explicit group membership for hardware access. Always check `grou
 ## 2. esptool Crash During Flash Upload
 
 **Symptom:**
+
 ```
 Uploading stub flasher...
 Traceback (most recent call last):
@@ -41,6 +45,7 @@ A fatal error occurred: The chip stopped responding.
 esptool v5.2.0 has known stability issues with certain ESP32-D0WD-V3 revisions during high-speed (921600 baud) flash writes.
 
 **Solution:**
+
 - Held the BOOT button during upload to force the chip into a stable download mode.
 - Reduced upload speed to 115200 baud in Arduino IDE settings.
 - Later confirmed esptool v4.5.1 is more stable for this chip revision.
@@ -60,6 +65,7 @@ The MG996R purchased was a **continuous rotation** (360°) variant, not a standa
 
 **Solution:**
 Replaced all angle-based logic with directional speed control:
+
 ```cpp
 // Standard servo (wrong approach)
 servo.write(90);   // would move to 90 degrees
@@ -75,24 +81,29 @@ Always verify the exact variant of a component before coding. A "360° servo" is
 
 ---
 
-## 4. Servo Drifting at Stop Point
+## 4. Servo Drifting at Stop Point & Internal Hardware Analysis
 
 **Symptom:**
-Even when sending `write(90)`, the servo continued to creep slowly in one direction. Adjusting the code to `write(88)` or `write(92)` did not consistently fix it.
+Even when sending `write(90)`, the servo continued to creep slowly in one direction. Adjusting the code to `write(88)` or `write(92)` did not consistently fix it. The servo stopped at 90 during bench testing, but drifted under load or different power conditions.
 
-**Root Cause:**
-Factory-calibrated servos have an internal potentiometer trim that sets the electrical "center" point. Manufacturing tolerances mean the true stop value may be 88, 90, 92, or even further from 90.
+**Investigation:**
+To identify the root cause, the servo was disassembled by removing the four bottom screws. Inside, we inspected the circuit board for a trim potentiometer (a small adjustable screw used to calibrate the center point).
+
+**Finding:**
+This specific unit was **factory-modified for continuous rotation** and **did not have a user-accessible trim potentiometer**. Instead, it used fixed resistors to set the center point. This explains why the stop value is set at the factory and cannot be physically adjusted without replacing internal resistors.
 
 **Solution:**
-Added a software trim variable to the code:
+Added a software trim variable to the firmware to compensate for the hardware offset:
+
 ```cpp
 static constexpr int8_t SERVO_TRIM = 0;
 static constexpr uint8_t SERVO_STOP_REAL = 90 + SERVO_TRIM;
 ```
+
 This allows calibration without recompiling all servo references. The value can be adjusted by ±5 to compensate for the unit's specific offset.
 
 **Lesson Learned:**
-No two continuous rotation servos are identical. Always include a calibration mechanism in the firmware for production deployments.
+No two continuous rotation servos are identical, and factory-modified units may lack user calibration hardware. Always include a software trim mechanism in the firmware for production deployments.
 
 ---
 
@@ -106,6 +117,7 @@ The ESP32's 12-bit ADC is inherently noisy, especially with WiFi/Bluetooth activ
 
 **Solution:**
 Implemented a two-stage noise reduction pipeline:
+
 1. **16x Oversampling:** Average 16 consecutive reads (reduces noise by ~4×).
    ```cpp
    uint32_t sum = 0;
@@ -154,9 +166,11 @@ The external charger's ground was not connected to the ESP32's ground. Without a
 
 **Solution:**
 Connected a jumper wire from the external charger's negative terminal to the ESP32 GND pin:
+
 ```
 [Charger GND] ──> [ESP32 GND] ──> [Servo GND]
 ```
+
 This established a common ground reference for all components.
 
 **Lesson Learned:**
@@ -174,10 +188,12 @@ LDRs have wide manufacturing tolerances (±20% or more). Two LDRs from the same 
 
 **Solution:**
 Added a software offset constant to balance the readings:
+
 ```cpp
 static constexpr int16_t LDR_OFFSET = 0;  // Tune this value
 int16_t diff = (ldrLeft + LDR_OFFSET) - ldrRight;
 ```
+
 The offset is determined by measuring the difference when both LDRs see equal light and setting `LDR_OFFSET = -RawDiff`.
 
 **Lesson Learned:**
@@ -203,17 +219,18 @@ Component specifications matter. "Active" means built-in tone, "passive" means e
 
 ## Summary of Key Lessons
 
-| # | Challenge | Category | Prevention |
-|---|-----------|----------|------------|
-| 1 | Serial permission | OS/Setup | Check group membership before starting |
-| 2 | esptool crash | Toolchain | Use boot mode + lower baud rate |
-| 3 | 360° servo behavior | Component knowledge | Read datasheets carefully before coding |
-| 4 | Servo stop drift | Calibration | Include software trim in firmware |
-| 5 | ADC noise | Signal quality | Always oversample on ESP32 |
-| 6 | False night detection | Environment | Calibrate thresholds per environment |
-| 7 | Missing common ground | Wiring | Always tie all grounds together |
-| 8 | LDR mismatch | Manufacturing | Include software offset for sensor pairs |
-| 9 | Active vs passive buzzer | Component knowledge | Verify drive method before purchase |
+| #   | Challenge                | Category            | Prevention                               |
+| --- | ------------------------ | ------------------- | ---------------------------------------- |
+| 1   | Serial permission        | OS/Setup            | Check group membership before starting   |
+| 2   | esptool crash            | Toolchain           | Use boot mode + lower baud rate          |
+| 3   | 360° servo behavior      | Component knowledge | Read datasheets carefully before coding  |
+| 4   | Servo stop drift         | Calibration         | Include software trim in firmware        |
+| 5   | ADC noise                | Signal quality      | Always oversample on ESP32               |
+| 6   | False night detection    | Environment         | Calibrate thresholds per environment     |
+| 7   | Missing common ground    | Wiring              | Always tie all grounds together          |
+| 8   | LDR mismatch             | Manufacturing       | Include software offset for sensor pairs |
+| 9   | Active vs passive buzzer | Component knowledge | Verify drive method before purchase      |
 
 ---
-*Documented during development: April 2026*
+
+_Documented during development: April 2026_

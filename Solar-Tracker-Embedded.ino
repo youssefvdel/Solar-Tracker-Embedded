@@ -71,10 +71,15 @@ static constexpr uint16_t LDR_THRESHOLD = 120;   // Min diff to trigger movement
 static constexpr uint16_t LDR_DEADZONE = 20;    // Ignore small differences
 static constexpr uint16_t NIGHT_THRESHOLD = 500; // Below this on both LDRs = night
 
+// Servo pulse duration: how long (ms) to pulse the servo per tracking step
+// This prevents endless spinning. Adjust to control movement speed.
+static constexpr uint32_t SERVO_PULSE_MS = 100;  // Move for 100ms, then stop and re-read
+
 // LDR offset: balances manufacturing differences between the two LDRs
 // Adjust this until Diff reads ~0 when both LDRs see the same light.
 // Positive = Left reads higher, Negative = Right reads higher
-static constexpr int16_t LDR_OFFSET = 120;
+// NOTE: Keep this small (-50 to +50). Large values break the servo stop point.
+static constexpr int16_t LDR_OFFSET = 0;
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────
 static constexpr uint32_t INTERVAL_LDR = 200;     // Read LDRs every 200ms
@@ -578,16 +583,34 @@ void actionBackToMain() {
   openMenu(MAIN_MENU, MAIN_MENU_COUNT);
 }
 
-// ─── Helper: Sun Tracking Logic ─────────────────────────────
+// ─── Helper: Sun Tracking Logic (pulse-based movement) ──────
 void trackSun() {
   if (currentMode != MODE_AUTO) return;
+
   int16_t diff = static_cast<int16_t>((ldrLeft + LDR_OFFSET) - ldrRight);
+
   if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
+    // Centered — stop completely
     sunServo.write(SERVO_STOP_REAL);
-  } else if (diff > static_cast<int16_t>(LDR_THRESHOLD)) {
+    Serial.println("  -> HOLD (centered)");
+  } else if (diff > LDR_THRESHOLD) {
+    // Left is brighter — pulse right briefly, then stop
+    Serial.println("  -> Pulse CW (left brighter)");
     sunServo.write(SERVO_CW_SLOW);
-  } else if (diff < -static_cast<int16_t>(LDR_THRESHOLD)) {
+    delay(SERVO_PULSE_MS);
+    sunServo.write(SERVO_STOP_REAL);
+    Serial.println("  -> Stopped. Re-reading...");
+  } else if (diff < -LDR_THRESHOLD) {
+    // Right is brighter — pulse left briefly, then stop
+    Serial.println("  -> Pulse CCW (right brighter)");
     sunServo.write(SERVO_CCW_SLOW);
+    delay(SERVO_PULSE_MS);
+    sunServo.write(SERVO_STOP_REAL);
+    Serial.println("  -> Stopped. Re-reading...");
+  } else {
+    // WAIT: diff is between deadzone and threshold
+    sunServo.write(SERVO_STOP_REAL);
+    Serial.println("  -> WAIT (small diff, holding)");
   }
 }
 

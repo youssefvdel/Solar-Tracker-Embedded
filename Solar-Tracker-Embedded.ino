@@ -75,29 +75,8 @@ static constexpr uint16_t LDR_THRESHOLD = 120;   // Min diff to trigger movement
 static constexpr uint16_t LDR_DEADZONE = 20;    // Ignore small differences
 static constexpr uint16_t NIGHT_THRESHOLD = 500; // Below this on both LDRs = night
 
-// Servo pulse duration: how long (ms) to pulse the servo per tracking step
-// This prevents endless spinning. Adjust to control movement speed.
-static constexpr uint32_t SERVO_PULSE_MS = 100;  // Move for 100ms, then stop and re-read
-
-// Servo degrees per ms of pulsing (calibration needed)
-// CW and CCW may rotate at different speeds. Adjust by testing.
-// If servo hits limit too early, reduce these values.
-// If servo spins past physical limit, increase these values.
-static constexpr float DEGREES_PER_MS_CW = 0.05f;   // CW rotation speed (reduced for accuracy)
-static constexpr float DEGREES_PER_MS_CCW = 0.05f;  // CCW rotation speed (reduced for accuracy)
-
-// Safe tracking range: servo stops at these limits to prevent wire damage
-// Set to ±180° for full half-circle tracking range
-static constexpr int16_t ANGLE_MIN = -180;   // Degrees from start (CCW limit)
-static constexpr int16_t ANGLE_MAX = 180;    // Degrees from start (CW limit)
-
-// Current estimated angle (degrees from starting position)
-int16_t estimatedAngle = 0;
-
 // LDR offset: balances manufacturing differences between the two LDRs
 // Adjust this until Diff reads ~0 when both LDRs see the same light.
-// Positive = Left reads higher, Negative = Right reads higher
-// NOTE: Keep this small (-50 to +50). Large values break the servo stop point.
 static constexpr int16_t LDR_OFFSET = 0;
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────
@@ -131,7 +110,6 @@ uint8_t ldrBufIndex = 0;
 uint32_t lastLDRRead = 0;
 uint32_t lastDisplayUpdate = 0;
 uint32_t lastButtonCheck = 0;
-uint32_t lastServoUpdate = 0;
 
 // Button debounce tracker
 struct ButtonState {
@@ -395,7 +373,17 @@ void updateDisplayNormal() {
   }
 
   display.setCursor(0, 48);
-  display.printf("Angle: %d°", estimatedAngle);
+  display.print("Limits: ");
+  if (digitalRead(PIN_LIMIT_RIGHT) == LOW) {
+    display.print("[R] ");
+  } else {
+    display.print("[ ] ");
+  }
+  if (digitalRead(PIN_LIMIT_LEFT) == LOW) {
+    display.print("[L]");
+  } else {
+    display.print("[ ]");
+  }
 
   display.setCursor(0, 58);
   display.print("[SELECT] Menu");
@@ -596,11 +584,10 @@ void actionBackToMain() {
 
 // Reset estimated angle to center (call at dawn or on startup)
 void resetAngle() {
-  estimatedAngle = 0;
   Serial.println("Angle reset to 0° (center).");
 }
 
-// ─── Helper: Sun Tracking Logic (pulse-based with hardware limits) ──────
+// ─── Helper: Sun Tracking Logic (hardware limits only) ──────
 void trackSun() {
   if (currentMode != MODE_AUTO) return;
 
@@ -608,55 +595,34 @@ void trackSun() {
   bool hitRight = (digitalRead(PIN_LIMIT_RIGHT) == LOW);
   bool hitLeft = (digitalRead(PIN_LIMIT_LEFT) == LOW);
 
-  if (hitRight) {
-    Serial.println("  -> RIGHT LIMIT HIT! Resetting to max.");
-    estimatedAngle = ANGLE_MAX;
-    sunServo.write(SERVO_STOP_REAL);
-    return;
-  }
-  if (hitLeft) {
-    Serial.println("  -> LEFT LIMIT HIT! Resetting to min.");
-    estimatedAngle = ANGLE_MIN;
-    sunServo.write(SERVO_STOP_REAL);
-    return;
-  }
-
   int16_t diff = static_cast<int16_t>((ldrLeft + LDR_OFFSET) - ldrRight);
 
-  if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
+  if (hitRight && hitLeft) {
+    // Both limits hit? Shouldn't happen, but safe fallback
+    sunServo.write(SERVO_STOP_REAL);
+    Serial.println("  -> BOTH LIMITS HIT! Stopped.");
+  } else if (hitRight && diff > 0) {
+    // At right limit AND trying to go right → stop
+    sunServo.write(SERVO_STOP_REAL);
+    Serial.println("  -> RIGHT LIMIT. Stopped.");
+  } else if (hitLeft && diff < 0) {
+    // At left limit AND trying to go left → stop
+    sunServo.write(SERVO_STOP_REAL);
+    Serial.println("  -> LEFT LIMIT. Stopped.");
+  } else if (abs(diff) < LDR_DEADZONE) {
     sunServo.write(SERVO_STOP_REAL);
     Serial.println("  -> HOLD (centered)");
   } else if (diff > LDR_THRESHOLD) {
-    // Left is brighter — pulse right (CW) briefly
-    if (estimatedAngle >= ANGLE_MAX) {
-      Serial.printf("  -> SOFTWARE LIMIT (+%d°). Stopped.\n", estimatedAngle);
-      sunServo.write(SERVO_STOP_REAL);
-      return;
-    }
-    Serial.printf("  -> Pulse CW (%dms) | Angle: %d° | Diff: %d\n",
-                  SERVO_PULSE_MS, estimatedAngle, diff);
+    // Left is brighter → move CW
     sunServo.write(SERVO_CW_SLOW);
-    delay(SERVO_PULSE_MS);
-    sunServo.write(SERVO_STOP_REAL);
-    estimatedAngle += static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS_CW);
-    Serial.printf("  -> New angle: %d°\n", estimatedAngle);
+    Serial.println("  -> Moving CW (left brighter)");
   } else if (diff < -LDR_THRESHOLD) {
-    // Right is brighter — pulse left (CCW) briefly
-    if (estimatedAngle <= ANGLE_MIN) {
-      Serial.printf("  -> SOFTWARE LIMIT (%d°). Stopped.\n", estimatedAngle);
-      sunServo.write(SERVO_STOP_REAL);
-      return;
-    }
-    Serial.printf("  -> Pulse CCW (%dms) | Angle: %d° | Diff: %d\n",
-                  SERVO_PULSE_MS, estimatedAngle, diff);
+    // Right is brighter → move CCW
     sunServo.write(SERVO_CCW_SLOW);
-    delay(SERVO_PULSE_MS);
-    sunServo.write(SERVO_STOP_REAL);
-    estimatedAngle -= static_cast<int16_t>(SERVO_PULSE_MS * DEGREES_PER_MS_CCW);
-    Serial.printf("  -> New angle: %d°\n", estimatedAngle);
+    Serial.println("  -> Moving CCW (right brighter)");
   } else {
     sunServo.write(SERVO_STOP_REAL);
-    Serial.printf("  -> WAIT (small diff) | Angle: %d°\n", estimatedAngle);
+    Serial.println("  -> WAIT (small diff)");
   }
 }
 
@@ -797,15 +763,10 @@ void loop() {
     handleSelectButton();
   }
 
-  if (now - lastServoUpdate >= SERVO_UPDATE_MS) {
-    lastServoUpdate = now;
-    if (currentMode == MODE_AUTO) {
-      trackSun();
-    } else {
-      sunServo.write(SERVO_STOP_REAL);
-    }
-  }
+  // ── Sun Tracking (continuous, limited by hardware switches) ──
+  trackSun();
 
+  // ── OLED Update (non-blocking) ──
   if (now - lastDisplayUpdate >= INTERVAL_DISPLAY) {
     lastDisplayUpdate = now;
     updateDisplay();

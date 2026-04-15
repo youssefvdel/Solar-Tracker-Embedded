@@ -706,6 +706,14 @@ void setup() {
 void loop() {
   uint32_t now = millis();
 
+  // ── Hardware limit switches: instant override (highest priority) ──
+  if (digitalRead(PIN_LIMIT_RIGHT) == LOW || digitalRead(PIN_LIMIT_LEFT) == LOW) {
+    sunServo.write(SERVO_STOP_REAL);
+    // Only re-check limit switches until they release
+    delay(10);
+    return;
+  }
+
   updateTonePlayer();
   updateSunPulse();
   updateMenuAnimation();

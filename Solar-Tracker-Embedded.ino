@@ -67,8 +67,8 @@ static constexpr uint8_t SERVO_STOP_REAL = 90 + SERVO_TRIM;
 
 // ─── LDR Calibration ─────────────────────────────────────────
 static constexpr uint8_t LDR_SAMPLES = 16;       // Oversample count
-static constexpr uint16_t LDR_THRESHOLD = 200;   // Min diff to trigger movement (raised for indoor noise)
-static constexpr uint16_t LDR_DEADZONE = 100;     // Ignore small differences (raised for stability)
+static constexpr uint16_t LDR_THRESHOLD = 50;   // Min diff to trigger movement (adjusted for indoor ~50-150 range)
+static constexpr uint16_t LDR_DEADZONE = 20;    // Ignore small differences (adjusted for stability)
 static constexpr uint16_t NIGHT_THRESHOLD = 300; // Below this on both LDRs = night
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────

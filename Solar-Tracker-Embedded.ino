@@ -67,14 +67,14 @@ static constexpr uint8_t SERVO_STOP_REAL = 90 + SERVO_TRIM;
 
 // ─── LDR Calibration ─────────────────────────────────────────
 static constexpr uint8_t LDR_SAMPLES = 16;       // Oversample count
-static constexpr uint16_t LDR_THRESHOLD = 50;   // Min diff to trigger movement
+static constexpr uint16_t LDR_THRESHOLD = 120;   // Min diff to trigger movement
 static constexpr uint16_t LDR_DEADZONE = 20;    // Ignore small differences
-static constexpr uint16_t NIGHT_THRESHOLD = 300; // Below this on both LDRs = night
+static constexpr uint16_t NIGHT_THRESHOLD = 500; // Below this on both LDRs = night
 
 // LDR offset: balances manufacturing differences between the two LDRs
 // Adjust this until Diff reads ~0 when both LDRs see the same light.
 // Positive = Left reads higher, Negative = Right reads higher
-static constexpr int16_t LDR_OFFSET = 0;
+static constexpr int16_t LDR_OFFSET = 150;
 
 // ─── Timing (non-blocking, in milliseconds) ──────────────────
 static constexpr uint32_t INTERVAL_LDR = 200;     // Read LDRs every 200ms

@@ -57,8 +57,8 @@ Servo sunServo;
 
 // 360° continuous rotation control values (fit in uint8_t: 0-180)
 static constexpr uint8_t SERVO_STOP = 90;
-static constexpr uint8_t SERVO_CW_SLOW = 75;   // Rotate clockwise (slow)
-static constexpr uint8_t SERVO_CCW_SLOW = 105; // Rotate counter-clockwise (slow)
+static constexpr uint8_t SERVO_CW_SLOW = 60;   // Rotate clockwise (faster for testing)
+static constexpr uint8_t SERVO_CCW_SLOW = 120; // Rotate counter-clockwise (faster for testing)
 
 // Servo calibration: adjust this if the servo drifts at "stop"
 // Positive = stops later (e.g., 92), Negative = stops earlier (e.g., 88)
@@ -686,9 +686,20 @@ void loop() {
     ldrLeft = sumLeft / LDR_AVG_WINDOW;
     ldrRight = sumRight / LDR_AVG_WINDOW;
 
-    Serial.printf("L: %4u | R: %4u | Diff: %+d\n",
+    Serial.printf("L: %4u | R: %4u | Diff: %+d | Action: ",
                   ldrLeft, ldrRight,
                   static_cast<int16_t>(ldrLeft - ldrRight));
+
+    int16_t diff = static_cast<int16_t>(ldrLeft - ldrRight);
+    if (abs(diff) < static_cast<int16_t>(LDR_DEADZONE)) {
+      Serial.println("HOLD (90)");
+    } else if (diff > LDR_THRESHOLD) {
+      Serial.println("MOVE CW");
+    } else if (diff < -LDR_THRESHOLD) {
+      Serial.println("MOVE CCW");
+    } else {
+      Serial.println("WAIT");
+    }
   }
 
   // DISABLED FOR INDOOR TESTING

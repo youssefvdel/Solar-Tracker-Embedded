@@ -77,13 +77,15 @@ static constexpr uint32_t SERVO_PULSE_MS = 100;  // Move for 100ms, then stop an
 
 // Servo degrees per ms of pulsing (calibration needed)
 // CW and CCW may rotate at different speeds. Adjust by testing.
-static constexpr float DEGREES_PER_MS_CW = 0.15f;   // CW rotation speed
-static constexpr float DEGREES_PER_MS_CCW = 0.08f;  // CCW rotation speed (slower)
+// If servo hits limit too early, reduce these values.
+// If servo spins past physical limit, increase these values.
+static constexpr float DEGREES_PER_MS_CW = 0.05f;   // CW rotation speed (reduced for accuracy)
+static constexpr float DEGREES_PER_MS_CCW = 0.05f;  // CCW rotation speed (reduced for accuracy)
 
 // Safe tracking range: servo stops at these limits to prevent wire damage
-// Reduced to ±90° since your servo may only have ~90° of useful range
-static constexpr int16_t ANGLE_MIN = -90;    // Degrees from start (CCW limit)
-static constexpr int16_t ANGLE_MAX = 90;     // Degrees from start (CW limit)
+// Set to ±180° for full half-circle tracking range
+static constexpr int16_t ANGLE_MIN = -180;   // Degrees from start (CCW limit)
+static constexpr int16_t ANGLE_MAX = 180;    // Degrees from start (CW limit)
 
 // Current estimated angle (degrees from starting position)
 int16_t estimatedAngle = 0;

@@ -217,6 +217,54 @@ Component specifications matter. "Active" means built-in tone, "passive" means e
 
 ---
 
+## 10. Servo Overshoot and Limit Switch Integration
+
+**Symptom:**
+During continuous tracking, the servo would occasionally push past its physical rotation limits, straining the wires.
+
+**Root Cause:**
+The main loop executed multiple tasks sequentially. If a limit switch was hit while the code was busy reading sensors or updating the display, the servo would continue its previous command for a few milliseconds before the stop signal could be sent. This momentum could stress the physical wiring.
+
+**Investigation:**
+We analyzed the loop timing and found that the `trackSun()` function wasn't the first thing checked in the loop. We needed a way to **instantly** override any servo movement the moment a limit was triggered.
+
+**Solution:**
+We implemented a **Hardware Limit Switch** system with a software priority override:
+
+1. **Hardware Switches:** Two physical switches (wires touching a contact) were placed at the physical ends of the servo's range.
+2. **Instant Override:** The limit switch check was moved to the **very first line of the `loop()` function**.
+3. **Immediate Return:** If either limit switch is pressed (reading `LOW`), the code immediately sends a stop signal and uses `return` to skip all other processing until the switch is released.
+
+```cpp
+void loop() {
+  // Highest priority: Instant safety stop
+  if (digitalRead(PIN_LIMIT_RIGHT) == LOW || digitalRead(PIN_LIMIT_LEFT) == LOW) {
+    sunServo.write(SERVO_STOP_REAL);
+    return;
+  }
+  // ... rest of loop
+}
+```
+
+**Lesson Learned:**
+Safety-critical checks (like physical limits) must have the highest priority in the software loop. Placing them at the start of the loop ensures near-instant reaction times without needing complex interrupt logic.
+
+---
+
+**Symptom:**
+The buzzer only produced a single fixed tone (~3.9 kHz). Attempting to change frequency via PWM had no effect.
+
+**Root Cause:**
+The purchased buzzer is an **active** buzzer with a built-in oscillator. It accepts only ON/OFF signals. A **passive** buzzer is required to play different notes via PWM frequency control.
+
+**Solution:**
+Implemented rhythmic tone patterns (e.g., "to-to-too", "totot") using timed ON/OFF sequences instead of pitch changes. Each system event has a unique rhythmic signature.
+
+**Lesson Learned:**
+Component specifications matter. "Active" means built-in tone, "passive" means external control. Always verify the drive method before designing audio feedback.
+
+---
+
 ## Summary of Key Lessons
 
 | #   | Challenge                | Category            | Prevention                               |
@@ -234,3 +282,4 @@ Component specifications matter. "Active" means built-in tone, "passive" means e
 ---
 
 _Documented during development: April 2026_
+| 10  | Servo overshoot          | Safety/Loop Timing  | Priority checks at start of loop         |

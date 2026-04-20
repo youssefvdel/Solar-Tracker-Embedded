@@ -1,7 +1,6 @@
 /*
- * Sun Tracker — ESP32
- * ====================
- * Autonomous sun tracking system with dual LDR sensing and OLED UI.
+ * Solar Tracker - ESP32 Sun Tracking System
+ * University Embedded Systems Project
  */
 
 #include <Adafruit_GFX.h>
@@ -9,534 +8,482 @@
 #include <ESP32Servo.h>
 #include <Wire.h>
 
-// --- Pins ---
-static constexpr uint8_t PIN_SERVO = 12;
-static constexpr uint8_t PIN_LDR_LEFT = 34;
-static constexpr uint8_t PIN_LDR_RIGHT = 35;
-static constexpr uint8_t PIN_BUZZER = 14;
-static constexpr uint8_t PIN_OLED_SDA = 21;
-static constexpr uint8_t PIN_OLED_SCL = 22;
-static constexpr uint8_t PIN_BTN_LEFT = 4;
-static constexpr uint8_t PIN_BTN_SELECT = 18;
-static constexpr uint8_t PIN_BTN_RIGHT = 19;
-static constexpr uint8_t PIN_LIMIT_LEFT = 13;
-static constexpr uint8_t PIN_LIMIT_RIGHT = 15;
-static constexpr uint8_t PIN_BATTERY = 36;
+// ============================================
+// PIN CONNECTIONS
+// ============================================
+const uint8_t PIN_SERVO = 12;
+const uint8_t PIN_LDR_LEFT = 34;
+const uint8_t PIN_LDR_RIGHT = 35;
+const uint8_t PIN_BUZZER = 14;
+const uint8_t PIN_OLED_SDA = 21;
+const uint8_t PIN_OLED_SCL = 22;
+const uint8_t PIN_BTN_LEFT = 4;
+const uint8_t PIN_BTN_SELECT = 18;
+const uint8_t PIN_BTN_RIGHT = 19;
+const uint8_t PIN_LIMIT_LEFT = 13;
+const uint8_t PIN_LIMIT_RIGHT = 15;
+const uint8_t PIN_BATTERY = 36;
 
-// --- Config ---
-static constexpr uint8_t SCREEN_WIDTH = 128;
-static constexpr uint8_t SCREEN_HEIGHT = 64;
-static constexpr int8_t OLED_RESET = -1;
-static constexpr uint8_t SCREEN_ADDRESS = 0x3C;
+// ============================================
+// DISPLAY SETTINGS
+// ============================================
+const uint8_t SCREEN_W = 128;
+const uint8_t SCREEN_H = 64;
+const uint8_t OLED_ADDR = 0x3C;
 
-static constexpr uint8_t SERVO_STOP = 90;
-static constexpr uint8_t SERVO_RIGHT = 0;
-static constexpr uint8_t SERVO_LEFT = 180;
-static constexpr int8_t SERVO_TRIM = 0;
-static constexpr uint8_t SERVO_STOP_REAL = SERVO_STOP + SERVO_TRIM;
+// ============================================
+// SERVO SETTINGS
+// ============================================
+const uint8_t SERVO_STOP = 90;
+const uint8_t SERVO_CW = 0;
+const uint8_t SERVO_CCW = 180;
 
-// ==================== LDR SETTINGS ====================
-// LDR_SAMPLES: How many ADC reads to average (smooths jitter)
-// LDR_DEADZONE: Stop if light diff < this (prevents micro-jitter)
-// LDR_OFFSET: Calibrate sensor imbalance (if one reads higher)
-// LDR_HYSTERESIS: Need this much diff to reverse direction (stops flip-flop)
-static constexpr uint16_t LDR_SAMPLES = 128;    // Samples per reading (higher = smoother)
-static constexpr uint16_t LDR_DEADZONE = 200;    // Stop if |diff| < 200
-static constexpr int16_t LDR_OFFSET = 0;       // Calibration offset
-static constexpr int16_t LDR_HYSTERESIS = 80;   // Reverse requires >80 diff
-static constexpr uint16_t NIGHT_THRESHOLD = 500; // Night detection (both LDRs < this = dark)
+// ============================================
+// LDR SETTINGS
+// ============================================
+const uint16_t LDR_SAMPLES = 128;      // ADC samples per reading
+const uint16_t LDR_DEADZONE = 200;     // Stop if diff < this
+const int16_t LDR_OFFSET = 0;          // Sensor calibration offset
+const int16_t LDR_HYSTERESIS = 80;     // Need this to reverse direction
 
-// ==================== TIMING ====================
-// INTERVAL_LDR: How often to read sensors (ms)
-// INTERVAL_DISPLAY: How often to update OLED (ms)
-// INTERVAL_BUTTONS: How often to check buttons (ms)
-static constexpr uint32_t INTERVAL_LDR = 200;
-static constexpr uint32_t INTERVAL_DISPLAY = 100;
-static constexpr uint32_t INTERVAL_BUTTONS = 20;
-static constexpr uint32_t DEBOUNCE_MS = 50;
+// ============================================
+// TIMING INTERVALS (ms)
+// ============================================
+const uint32_t TIME_LDR = 200;
+const uint32_t TIME_DISPLAY = 100;
+const uint32_t TIME_BUTTONS = 20;
+const uint32_t DEBOUNCE = 50;
 
-// ==================== POWER ====================
-// IDLE_TIMEOUT: Minutes idle before deep sleep
-// SLEEP_CHECK_INTERVAL: Minutes between wake checks
-static constexpr uint32_t IDLE_TIMEOUT = 1;        // Minutes of no movement → sleep
-static constexpr uint32_t SLEEP_CHECK_INTERVAL = 30; // Seconds between wake checks
+// ============================================
+// POWER
+// ============================================
+const uint32_t IDLE_TIMEOUT_MIN = 1;
+const uint32_t WAKE_INTERVAL_SEC = 30;
 
-// ==================== SERVO ====================
-// SERVO_PULSE_ON: Time servo runs per pulse (ms)
-// SERVO_PULSE_OFF: Time servo stops per pulse (ms)
-// PULSE_BATCH: Move this many pulses before checking
-static constexpr uint32_t SERVO_PULSE_ON = 15;    // Servo ON time (ms)
-static constexpr uint32_t SERVO_PULSE_OFF = 250;  // Servo OFF time (ms)
-static constexpr uint8_t PULSE_BATCH = 1;       // Pulses before check
+// ============================================
+// SERVO PULSE
+// ============================================
+const uint32_t SERVO_ON = 15;
+const uint32_t SERVO_OFF = 250;
 
-// --- Objects ---
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-Servo sunServo;
+// ============================================
+// GLOBAL OBJECTS
+// ============================================
+Adafruit_SSD1306 oled(SCREEN_W, SCREEN_H, &Wire, -1);
+Servo trackerServo;
 
-// --- State ---
-enum Mode {
-  MODE_AUTO,
-  MODE_MANUAL,
-  MODE_STANDBY
-};
-enum State {
-  STATE_ACTIVE,
-  STATE_NIGHT,
-  STATE_SLEEP
-};
-enum MenuCtx {
-  MENU_NONE,
-  MENU_MAIN,
-  MENU_SETTINGS
-};
+// ============================================
+// SYSTEM STATE
+// ============================================
+enum SysMode { AUTO, MANUAL, STANDBY };
+enum MenuState { NO_MENU, MAIN_MENU };
 
-Mode mode = MODE_AUTO;
-State state = STATE_ACTIVE;
-MenuCtx menuCtx = MENU_NONE;
-uint8_t menuIdx = 0;
-uint8_t menuCnt = 0;
+SysMode currentMode = AUTO;
+MenuState menuState = NO_MENU;
 
-// Forward decl needed for menu
-void actionAuto();
-void actionManual();
-void actionSleep();
-void actionBack();
+// ============================================
+// MENU
+// ============================================
+void setAutoMode();
+void setManualMode();
+void enterSleepMode();
 
-struct MenuItem {
-  const char *label;
-  void (*action)();
+struct MenuOption {
+    const char* name;
+    void (*action)();
 };
 
-const MenuItem *currentMenu = nullptr;
-
-static const MenuItem MAIN_MENU[] = { { "Auto Track", actionAuto },
-                                      { "Manual", actionManual },
-                                      { "Sleep", actionSleep },
-                                      { "Back", actionBack } };
-static constexpr uint8_t MAIN_MENU_CNT = 4;
-// --- Battary Data ---
-uint8_t batteryPct = 0;
-
-// --- LDR Data ---
-uint16_t ldrLeft = 0;
-uint16_t ldrRight = 0;
-uint16_t ldrBufL[5] = { 0 };
-uint16_t ldrBufR[5] = { 0 };
-uint8_t ldrIdx = 0;
-
-// --- Timing ---
-uint32_t lastLDR = 0;
-uint32_t lastDisplay = 0;
-uint32_t lastBtn = 0;
-uint32_t lastPulse = 0;
-uint32_t lastMoveTime = 0;
-bool pulseOn = false;
-
-// --- Buttons ---
-struct Btn {
-  bool pressed = false;
-  bool lastRaw = false;
-  uint32_t lastChange = 0;
+const MenuOption mainMenu[] = {
+    {"Auto", setAutoMode},
+    {"Manual", setManualMode},
+    {"Sleep", enterSleepMode}
 };
-Btn btns[3];
+const uint8_t MENU_COUNT = 3;
+uint8_t menuPos = 0;
+const MenuOption* activeMenu = nullptr;
 
-// --- Animation ---
-float sunPulse = 0.0f;
-struct Anim {
-  uint8_t frame = 0;
-  uint8_t maxFrame = 0;
-  uint32_t interval = 0;
-  uint32_t lastFrame = 0;
-  bool playing = false;
+// ============================================
+// SENSORS
+// ============================================
+uint16_t ldrL = 0, ldrR = 0;
+uint16_t bufL[5] = {0}, bufR[5] = {0};
+uint8_t bufIdx = 0;
+uint8_t battery = 0;
+
+// ============================================
+// TIMING
+// ============================================
+uint32_t tLDR = 0, tDisplay = 0, tBtn = 0, tBat = 0, tPulse = 0;
+uint32_t tLastMove = 0;
+bool pulseActive = false;
+
+// ============================================
+// BUTTONS
+// ============================================
+struct Button {
+    bool pressed = false;
+    bool lastState = false;
+    uint32_t tChange = 0;
 };
-Anim bootAnim = { 0, 20, 80, 0, false };
-Anim menuAnim = { 0, 6, 50, 0, false };
+Button btn[3];
 
-// --- Tone ---
-struct Tone {
-  const char *pattern;
-  uint8_t ms;
-};
-static constexpr Tone TONE_START = { "101011", 120 };
-static constexpr Tone TONE_SCROLL = { "1", 60 };
-static constexpr Tone TONE_SELECT = { "101", 100 };
-static constexpr Tone TONE_SLEEP = { "10101000", 150 };
+// ============================================
+// BUZZER
+// ============================================
+const char BEEP_START[] = "101011";
+const char BEEP_SCROLL[] = "1";
+const char BEEP_SELECT[] = "101";
+const char BEEP_SLEEP[] = "10101000";
 
-struct TonePlayer {
-  const char *pattern = nullptr;
-  uint8_t ms = 100;
-  uint8_t idx = 0;
-  uint32_t lastBeat = 0;
-  bool playing = false;
-} tonePlayer;
+struct ToneGen {
+    const char* pattern = nullptr;
+    uint8_t speed = 100;
+    uint8_t index = 0;
+    uint32_t tLast = 0;
+    bool playing = false;
+} beep;
 
-// --- Forward ---
-void openMenu(const MenuItem *m, uint8_t c);
-void closeMenu();
-void playTone(const Tone &t);
-void updateTone();
-uint16_t readLDR(uint8_t pin);
-bool btnPressed(uint8_t pin, uint8_t idx);
-void handleBtns();
-void trackSun(uint32_t now);
-void goToSleep();
-void drawBoot();
-void drawDisplay();
-void actionBack();
-void actionAuto();
-void actionManual();
-void actionSleep();
+// ============================================
+// TRACKING STATE
+// ============================================
+bool lastDirection = false;
+bool hasPulsed = false;
 
-// --- Menu Actions ---
-void actionAuto() {
-  mode = MODE_AUTO;
-  state = STATE_ACTIVE;
-  closeMenu();
-}
-void actionManual() {
-  mode = MODE_MANUAL;
-  state = STATE_ACTIVE;
-  closeMenu();
-}
-void actionSleep() {
-  closeMenu();
-  goToSleep();
-}
-void actionBack() {
-  openMenu(MAIN_MENU, MAIN_MENU_CNT);
-}
+// ============================================
+// FORWARD DECLARATIONS
+// ============================================
+void readSensors();
+void updateBattery();
+void checkButtons();
+void trackingLogic();
+uint16_t readSensor(uint8_t pin);
+bool buttonPress(uint8_t pin, uint8_t idx);
+void showDisplay();
+void sleepMode();
+void playTone(const char* pattern);
 
-// --- Setup ---
+// ============================================
+// SETUP
+// ============================================
 void setup() {
-  Serial.begin(115200);
-  Serial.println("\n=== Sun Tracker ===");
+    Serial.begin(115200);
+    Serial.println("\n=== Solar Tracker Starting ===");
 
-  pinMode(PIN_BUZZER, OUTPUT);
-  digitalWrite(PIN_BUZZER, LOW);
+    pinMode(PIN_BUZZER, OUTPUT);
+    digitalWrite(PIN_BUZZER, LOW);
 
-  pinMode(PIN_BTN_LEFT, INPUT_PULLUP);
-  pinMode(PIN_BTN_RIGHT, INPUT_PULLUP);
-  pinMode(PIN_BTN_SELECT, INPUT_PULLUP);
-  pinMode(PIN_LIMIT_LEFT, INPUT_PULLUP);
-  pinMode(PIN_LIMIT_RIGHT, INPUT_PULLUP);
-  pinMode(PIN_BATTERY, INPUT);
+    pinMode(PIN_BTN_LEFT, INPUT_PULLUP);
+    pinMode(PIN_BTN_RIGHT, INPUT_PULLUP);
+    pinMode(PIN_BTN_SELECT, INPUT_PULLUP);
+    pinMode(PIN_LIMIT_LEFT, INPUT_PULLUP);
+    pinMode(PIN_LIMIT_RIGHT, INPUT_PULLUP);
+    pinMode(PIN_BATTERY, INPUT);
 
-  Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println("OLED fail!");
-    while (1)
-      ;
-  }
-
-  Serial.println("Boot anim...");
-  bootAnim.playing = true;
-  bootAnim.frame = 1;
-  while (bootAnim.playing) {
-    if (millis() - bootAnim.lastFrame >= bootAnim.interval) {
-      bootAnim.lastFrame = millis();
-      bootAnim.frame++;
-      if (bootAnim.frame > bootAnim.maxFrame)
-        bootAnim.playing = false;
+    Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
+    if (!oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
+        Serial.println("OLED Error!");
+        while(1);
     }
-    delay(10);
-  }
 
-  sunServo.attach(PIN_SERVO);
-  sunServo.write(SERVO_STOP_REAL);
+    trackerServo.attach(PIN_SERVO);
+    trackerServo.write(SERVO_STOP);
 
-  ldrLeft = readLDR(PIN_LDR_LEFT);
-  ldrRight = readLDR(PIN_LDR_RIGHT);
-  Serial.printf("LDR: %u | %u\n", ldrLeft, ldrRight);
+    ldrL = readSensor(PIN_LDR_LEFT);
+    ldrR = readSensor(PIN_LDR_RIGHT);
+    Serial.printf("Initial LDR: L=%u R=%u\n", ldrL, ldrR);
 
-  // Night detection - enable by changing to true if needed
-  bool enableNightDetect = false;
-  if (enableNightDetect && ldrLeft < NIGHT_THRESHOLD && ldrRight < NIGHT_THRESHOLD) {
-    Serial.println("Night - sleep");
-    state = STATE_NIGHT;
-    goToSleep();
-  }
+    tLastMove = millis();
 
-  playTone(TONE_START);
-  Serial.println("Ready");
+    playTone(BEEP_START);
+    Serial.println("Ready");
 }
 
-// --- Loop ---
+// ============================================
+// MAIN LOOP
+// ============================================
 void loop() {
-  uint32_t now = millis();
+    uint32_t now = millis();
 
-  updateTone();
+    // Buzzer tone
+    if (beep.playing && beep.pattern) {
+        if (now - beep.tLast >= beep.speed) {
+            beep.tLast = now;
+            char bit = beep.pattern[beep.index];
+            if (bit == '\0') {
+                digitalWrite(PIN_BUZZER, LOW);
+                beep.playing = false;
+            } else {
+                digitalWrite(PIN_BUZZER, bit == '1' ? HIGH : LOW);
+                beep.index++;
+            }
+        }
+    }
 
-  if (now - lastPulse >= (pulseOn ? SERVO_PULSE_ON : SERVO_PULSE_OFF)) {
-    lastPulse = now;
-    pulseOn = !pulseOn;
-  }
+    // Servo pulse timing
+    if (now - tPulse >= (pulseActive ? SERVO_ON : SERVO_OFF)) {
+        tPulse = now;
+        pulseActive = !pulseActive;
+    }
 
-  if (now - lastLDR >= INTERVAL_LDR) {
-    lastLDR = now;
-    uint16_t rawL = readLDR(PIN_LDR_LEFT);
-    uint16_t rawR = readLDR(PIN_LDR_RIGHT);
-    ldrBufL[ldrIdx] = rawL;
-    ldrBufR[ldrIdx] = rawR;
-    ldrIdx = (ldrIdx + 1) % 5;
+    // Read LDR sensors
+    if (now - tLDR >= TIME_LDR) {
+        tLDR = now;
+        readSensors();
+        hasPulsed = false;  // Allow new pulse
+
+        int16_t diff = (ldrL + LDR_OFFSET) - ldrR;
+        Serial.printf("L:%u R:%u D:%d ", ldrL, ldrR, diff);
+        Serial.println(abs(diff) < LDR_DEADZONE ? "CENTER" : (diff > 0 ? "LEFT" : "RIGHT"));
+    }
+
+    // Battery check
+    if (now - tBat >= 1000) {
+        tBat = now;
+        updateBattery();
+    }
+
+    // Check buttons
+    if (now - tBtn >= TIME_BUTTONS) {
+        tBtn = now;
+        checkButtons();
+    }
+
+    // Auto tracking
+    if (currentMode == AUTO) {
+        trackingLogic();
+    }
+
+    // IDLE SLEEP DISABLED FOR TESTING
+    // if (currentMode == AUTO && (now - tLastMove) >= (IDLE_TIMEOUT_MIN * 60000UL)) {
+    //     Serial.println("Idle timeout - sleeping");
+    //     sleepMode();
+    // }
+
+    // Update display
+    if (now - tDisplay >= TIME_DISPLAY) {
+        tDisplay = now;
+        showDisplay();
+    }
+}
+
+// ============================================
+// SENSOR FUNCTIONS
+// ============================================
+void readSensors() {
+    uint16_t rawL = readSensor(PIN_LDR_LEFT);
+    uint16_t rawR = readSensor(PIN_LDR_RIGHT);
+
+    bufL[bufIdx] = rawL;
+    bufR[bufIdx] = rawR;
+    bufIdx = (bufIdx + 1) % 5;
+
     uint32_t sumL = 0, sumR = 0;
     for (uint8_t i = 0; i < 5; i++) {
-      sumL += ldrBufL[i];
-      sumR += ldrBufR[i];
+        sumL += bufL[i];
+        sumR += bufR[i];
     }
-    ldrLeft = sumL / 5;
-    ldrRight = sumR / 5;
-
-    // Read battery (every ~1 second)
-    static uint32_t lastBat = 0;
-    if (now - lastBat >= 1000) {
-      lastBat = now;
-      uint16_t batRaw = analogRead(PIN_BATTERY);
-      float batVolts = (batRaw / 4095.0f) * 3.3f * 2.0f;
-      Serial.printf("BatADC: %u = %.2fV\n", batRaw, batVolts);
-      // 18650: 3.0V = 0%, 4.2V = 100%
-      int pct = (int)((batVolts - 3.0f) * 100.0f / 1.2f);
-      batteryPct = constrain(pct, 0, 100);
-      Serial.printf("Bat: %u%%\n", batteryPct);
-    }
-
-    int16_t diff = (ldrLeft + LDR_OFFSET) - ldrRight;
-    Serial.printf("L:%u R:%u Diff:%d ", ldrLeft, ldrRight, diff);
-
-    if (abs(diff) < LDR_DEADZONE)
-      Serial.println("HOLD");
-    else if (diff > 0)
-      Serial.println("LEFT");
-    else if (diff < 0)
-      Serial.println("RIGHT");
-  }
-
-  if (now - lastBtn >= INTERVAL_BUTTONS) {
-    lastBtn = now;
-    handleBtns();
-  }
-
-  trackSun(now);
-
-  // Check idle timeout - deep sleep if no movement
-  if (mode == MODE_AUTO && (now - lastMoveTime) >= (IDLE_TIMEOUT * 60UL * 1000UL)) {
-    Serial.println("Idle - deep sleep");
-    goToSleep();
-    return;
-  }
-
-  if (now - lastDisplay >= INTERVAL_DISPLAY) {
-    lastDisplay = now;
-    drawDisplay();
-  }
+    ldrL = sumL / 5;
+    ldrR = sumR / 5;
 }
 
-// --- Functions ---
-static bool lastDir = false;
-static uint8_t pulseCount = 0;
+uint16_t readSensor(uint8_t pin) {
+    uint32_t total = 0;
+    for (uint16_t i = 0; i < LDR_SAMPLES; i++) {
+        total += analogRead(pin);
+    }
+    return total / LDR_SAMPLES;
+}
 
-void trackSun(uint32_t now) {
-  if (mode != MODE_AUTO)
-    return;
+void updateBattery() {
+    uint16_t raw = analogRead(PIN_BATTERY);
+    float volts = (raw / 4095.0f) * 3.3f * 2.0f;
+    int pct = (int)((volts - 3.0f) * 100.0f / 1.2f);
+    battery = constrain(pct, 0, 100);
+    Serial.printf("Bat: %u%%\n", battery);
+}
 
-  // Check limit switches - stop at limit, allow opposite
-  bool hitLeft = digitalRead(PIN_LIMIT_LEFT) == LOW;
-  bool hitRight = digitalRead(PIN_LIMIT_RIGHT) == LOW;
+// ============================================
+// TRACKING
+// ============================================
+void trackingLogic() {
+    // Check limit switches
+    bool limitL = digitalRead(PIN_LIMIT_LEFT) == LOW;
+    bool limitR = digitalRead(PIN_LIMIT_RIGHT) == LOW;
 
-  // At limit - reverse immediately for 360 effect
-  bool forceReverse = false;
-  if (hitLeft) {
-    lastDir = false;
-    Serial.println("LIMIT LEFT → REVERSE");
-    forceReverse = true;
-  } else if (hitRight) {
-    lastDir = true;
-    Serial.println("LIMIT RIGHT → REVERSE");
-    forceReverse = true;
-  }
+    if (limitL) {
+        lastDirection = false;
+        Serial.println("LIMIT LEFT");
+    } else if (limitR) {
+        lastDirection = true;
+        Serial.println("LIMIT RIGHT");
+    }
 
-  int16_t diff = (ldrLeft + LDR_OFFSET) - ldrRight;
-  bool newDir = diff > 0;
+    int16_t diff = (ldrL + LDR_OFFSET) - ldrR;
 
-  // Skip normal checks if forced reverse
-  if (!forceReverse) {
+    // Centered - stop and reset timer
     if (abs(diff) < LDR_DEADZONE) {
-      sunServo.write(SERVO_STOP_REAL);
-      pulseCount = 0;
-      return;
+        trackerServo.write(SERVO_STOP);
+        tLastMove = millis();
+        return;
     }
 
-    // Check hysteresis before reversing
-    if (newDir != lastDir && abs(diff) < LDR_HYSTERESIS) {
-      sunServo.write(SERVO_STOP_REAL);
-      return;
-    }
-    lastDir = newDir;
-  }
+    bool newDir = diff > 0;
 
-  // Move batch of pulses, then check again
-  if (pulseOn) {
-    pulseCount++;
-    lastMoveTime = now;
-    sunServo.write(lastDir ? SERVO_RIGHT : SERVO_LEFT);
-  } else {
-    sunServo.write(SERVO_STOP_REAL);
-    if (pulseCount >= PULSE_BATCH) {
-      pulseCount = 0;
-      return;
+    // Hysteresis check
+    if (newDir != lastDirection && abs(diff) < LDR_HYSTERESIS) {
+        trackerServo.write(SERVO_STOP);
+        return;
     }
-  }
+    lastDirection = newDir;
+
+    // One pulse per cycle
+    if (!hasPulsed && pulseActive) {
+        hasPulsed = true;
+        tLastMove = millis();
+        trackerServo.write(lastDirection ? SERVO_CW : SERVO_CCW);
+        delay(SERVO_ON);
+        trackerServo.write(SERVO_STOP);
+    }
 }
 
-bool btnPressed(uint8_t pin, uint8_t idx) {
-  bool raw = digitalRead(pin) == LOW;
-  uint32_t now = millis();
-  if (raw != btns[idx].lastRaw)
-    btns[idx].lastChange = now;
-  btns[idx].lastRaw = raw;
-  if (raw && now - btns[idx].lastChange >= DEBOUNCE_MS) {
-    if (!btns[idx].pressed) {
-      btns[idx].pressed = true;
-      return true;
+// ============================================
+// BUTTONS
+// ============================================
+bool buttonPress(uint8_t pin, uint8_t idx) {
+    bool raw = digitalRead(pin) == LOW;
+    uint32_t now = millis();
+    if (raw != btn[idx].lastState) {
+        btn[idx].tChange = now;
     }
-  } else if (!raw) {
-    btns[idx].pressed = false;
-  }
-  return false;
+    btn[idx].lastState = raw;
+
+    if (raw && (now - btn[idx].tChange) >= DEBOUNCE) {
+        if (!btn[idx].pressed) {
+            btn[idx].pressed = true;
+            return true;
+        }
+    } else if (!raw) {
+        btn[idx].pressed = false;
+    }
+    return false;
 }
 
-void handleBtns() {
-  if (btnPressed(PIN_BTN_LEFT, 0)) {
-    if (menuCtx != MENU_NONE && menuIdx > 0)
-      menuIdx--;
-    else if (mode == MODE_MANUAL || mode == MODE_STANDBY)
-      sunServo.write(SERVO_LEFT);
-    playTone(TONE_SCROLL);
-  }
-  if (btnPressed(PIN_BTN_RIGHT, 1)) {
-    if (menuCtx != MENU_NONE && menuIdx < menuCnt - 1)
-      menuIdx++;
-    else if (mode == MODE_MANUAL || mode == MODE_STANDBY)
-      sunServo.write(SERVO_RIGHT);
-    playTone(TONE_SCROLL);
-  }
-  if (btnPressed(PIN_BTN_SELECT, 2)) {
-    if (menuCtx != MENU_NONE && currentMenu && currentMenu[menuIdx].action) {
-      currentMenu[menuIdx].action();
+void checkButtons() {
+    if (buttonPress(PIN_BTN_LEFT, 0)) {
+        if (menuState == MAIN_MENU && menuPos > 0) menuPos--;
+        else if (currentMode == MANUAL && digitalRead(PIN_LIMIT_LEFT) != LOW) {
+            trackerServo.write(SERVO_CCW);
+        }
+        playTone(BEEP_SCROLL);
+    }
+
+    if (buttonPress(PIN_BTN_RIGHT, 1)) {
+        if (menuState == MAIN_MENU && menuPos < MENU_COUNT - 1) menuPos++;
+        else if (currentMode == MANUAL && digitalRead(PIN_LIMIT_RIGHT) != LOW) {
+            trackerServo.write(SERVO_CW);
+        }
+        playTone(BEEP_SCROLL);
+    }
+
+    if (buttonPress(PIN_BTN_SELECT, 2)) {
+        if (menuState == MAIN_MENU && activeMenu && activeMenu[menuPos].action) {
+            activeMenu[menuPos].action();
+        } else {
+            activeMenu = mainMenu;
+            menuState = MAIN_MENU;
+        }
+        playTone(BEEP_SELECT);
+    }
+}
+
+void playTone(const char* pattern) {
+    beep.pattern = pattern;
+    beep.index = 0;
+    beep.tLast = millis();
+    beep.playing = true;
+}
+
+// ============================================
+// MENU ACTIONS
+// ============================================
+void setAutoMode() {
+    currentMode = AUTO;
+    menuState = NO_MENU;
+}
+
+void setManualMode() {
+    currentMode = MANUAL;
+    menuState = NO_MENU;
+}
+
+void enterSleepMode() {
+    menuState = NO_MENU;
+    sleepMode();
+}
+
+// ============================================
+// DISPLAY
+// ============================================
+void showDisplay() {
+    oled.clearDisplay();
+    oled.setTextSize(1);
+    oled.setTextColor(SSD1306_WHITE);
+
+    if (menuState == NO_MENU) {
+        const char* modeStr = (currentMode == AUTO) ? "AUTO" :
+                             (currentMode == MANUAL) ? "MAN" : "STBY";
+        oled.setCursor(0, 0);
+        oled.print(modeStr);
+
+        oled.setCursor(50, 0);
+        oled.printf("B:%u%%", battery);
+
+        oled.setCursor(0, 16);
+        oled.printf("L:%u", ldrL);
+        oled.setCursor(0, 26);
+        oled.printf("R:%u", ldrR);
+
+        int16_t diff = (ldrL + LDR_OFFSET) - ldrR;
+        oled.setCursor(0, 38);
+        if (abs(diff) < LDR_DEADZONE) oled.print("[=] CENTER");
+        else if (diff > 0) oled.print("[>] LEFT");
+        else oled.print("[<] RIGHT");
+
+        oled.setCursor(0, 56);
+        oled.print("[SEL] Menu");
+
     } else {
-      openMenu(MAIN_MENU, MAIN_MENU_CNT);
+        oled.setCursor(0, 0);
+        oled.print("=== MENU ===");
+
+        for (uint8_t i = 0; i < MENU_COUNT && i < 4; i++) {
+            oled.setCursor(0, 16 + i * 10);
+            if (i == menuPos) oled.print(">");
+            oled.print(mainMenu[i].name);
+        }
     }
-    playTone(TONE_SELECT);
-  }
+    oled.display();
 }
 
-void playTone(const Tone &t) {
-  tonePlayer.pattern = t.pattern;
-  tonePlayer.ms = t.ms;
-  tonePlayer.idx = 0;
-  tonePlayer.lastBeat = millis();
-  tonePlayer.playing = true;
-}
+// ============================================
+// SLEEP
+// ============================================
+void sleepMode() {
+    playTone(BEEP_SLEEP);
+    delay(800);
 
-void updateTone() {
-  if (!tonePlayer.playing || !tonePlayer.pattern)
-    return;
-  uint32_t now = millis();
-  if (now - tonePlayer.lastBeat >= tonePlayer.ms) {
-    tonePlayer.lastBeat = now;
-    char b = tonePlayer.pattern[tonePlayer.idx];
-    if (b == '\0') {
-      digitalWrite(PIN_BUZZER, LOW);
-      tonePlayer.playing = false;
-    } else {
-      digitalWrite(PIN_BUZZER, b == '1' ? HIGH : LOW);
-      tonePlayer.idx++;
-    }
-  }
-}
+    oled.clearDisplay();
+    oled.setTextSize(2);
+    oled.setCursor(10, 20);
+    oled.print("SLEEP");
+    oled.display();
 
-uint16_t readLDR(uint8_t pin) {
-  uint32_t sum = 0;
-  for (uint8_t i = 0; i < LDR_SAMPLES; i++) {
-    sum += analogRead(pin);
-  }
-  return sum / LDR_SAMPLES;
-}
+    digitalWrite(PIN_BUZZER, LOW);
+    trackerServo.detach();
 
-void openMenu(const MenuItem *m, uint8_t c) {
-  currentMenu = m;
-  menuCnt = c;
-  menuIdx = 0;
-  menuCtx = MENU_MAIN;
-  menuAnim.playing = true;
-  menuAnim.frame = 0;
-}
+    esp_sleep_enable_timer_wakeup(WAKE_INTERVAL_SEC * 1000000ULL);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_SELECT, LOW);
 
-void closeMenu() {
-  menuCtx = MENU_NONE;
-  menuIdx = 0;
-}
-
-void drawDisplay() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-
-  if (menuCtx == MENU_NONE) {
-    const char *m = mode == MODE_AUTO     ? "AUTO"
-                    : mode == MODE_MANUAL ? "MAN"
-                                          : "STBY";
-    display.setCursor(0, 0);
-    display.print(m);
-
-    display.setCursor(0, 16);
-    display.printf("L:%u", ldrLeft);
-    display.setCursor(0, 26);
-    display.printf("R:%u", ldrRight);
-
-    int16_t diff = (ldrLeft + LDR_OFFSET) - ldrRight;
-    display.setCursor(0, 38);
-    if (abs(diff) < LDR_DEADZONE)
-      display.print("[=] CENTER");
-    else if (diff > 0)
-      display.print("[>] LEFT");
-    else
-      display.print("[<] RIGHT");
-
-    display.setCursor(50, 0);
-    display.printf("B:%u%%", batteryPct);
-
-    display.setCursor(0, 56);
-    display.print("[SEL] Menu");
-  } else {
-    display.setCursor(0, 0);
-    display.print("== MENU ==");
-
-    for (uint8_t i = 0; i < menuCnt && i < 4; i++) {
-      display.setCursor(0, 16 + i * 10);
-      if (i == menuIdx) {
-        display.print(">");
-      }
-      display.print(currentMenu[i].label);
-    }
-  }
-  display.display();
-}
-
-void goToSleep() {
-  playTone(TONE_SLEEP);
-  delay(800);
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setCursor(10, 20);
-  display.print("SLEEP");
-  display.display();
-
-  digitalWrite(PIN_BUZZER, LOW);
-  sunServo.detach();
-
-  esp_sleep_enable_timer_wakeup(30ULL * 1000000ULL);  // 30 seconds
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_SELECT, LOW);
-
-  delay(500);
-  esp_deep_sleep_start();
+    delay(500);
+    esp_deep_sleep_start();
 }

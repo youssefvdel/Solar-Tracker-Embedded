@@ -6,20 +6,20 @@ Complete wiring reference for the Sun Tracker project. All connections use the E
 
 ## 1. ESP32 Pin Map
 
-| GPIO | Component | Type | Notes |
-|------|-----------|------|-------|
-| 12 | Servo Signal | PWM Out | MG996R orange wire |
-| 33 | LDR Left | ADC In | Input-only pin |
-| 34 | LDR Right | ADC In | Input-only pin |
-| 14 | Buzzer | Digital Out | Active buzzer |
-| 21 | OLED SDA | I2C | Default ESP32 I2C |
-| 22 | OLED SCL | I2C | Default ESP32 I2C |
-| 4 | Button 1 | Digital In | Pull-up |
-| 13 | Button 2 | Digital In | Pull-up |
-| 15 | Button 3 | Digital In | Pull-up |
-| 16 | Button 4 | Digital In | Pull-up |
-| 17 | Button 5 | Digital In | Pull-up |
-| 18 | Button 6 | Digital In | Pull-up |
+| GPIO | Component    | Type        | Notes              |
+| ---- | ------------ | ----------- | ------------------ |
+| 12   | Servo Signal | PWM Out     | MG996R orange wire |
+| 33   | LDR Left     | ADC In      | Input-only pin     |
+| 34   | LDR Right    | ADC In      | Input-only pin     |
+| 14   | Buzzer       | Digital Out | Active buzzer      |
+| 21   | OLED SDA     | I2C         | Default ESP32 I2C  |
+| 22   | OLED SCL     | I2C         | Default ESP32 I2C  |
+| 4    | Button 1     | Digital In  | Pull-up            |
+| 13   | Button 2     | Digital In  | Pull-up            |
+| 15   | Button 3     | Digital In  | Pull-up            |
+| 16   | Button 4     | Digital In  | Pull-up            |
+| 17   | Button 5     | Digital In  | Pull-up            |
+| 18   | Button 6     | Digital In  | Pull-up            |
 
 ---
 
@@ -33,7 +33,7 @@ Each LDR forms a voltage divider with a 10kΩ resistor.
        ┌─┴─┐
        │LDR│  ← Light dependent resistance
        └─┬─┘
-         ├──────→ GPIO 33 (Left) or 34 (Right)
+         ├──────→ GPIO 34 (Left) or 35 (Right)
        ┌─┴─┐
        │10k│  ← Fixed resistor
        └─┬─┘
@@ -44,14 +44,14 @@ Each LDR forms a voltage divider with a 10kΩ resistor.
 ### Physical Wiring
 1. Insert LDR into breadboard
 2. Connect one LDR leg to **3.3V** rail
-3. Connect other LDR leg to **GPIO 33** (Left) or **34** (Right)
+3. Connect other LDR leg to **GPIO 34** (Left) or **35** (Right)
 4. From that same leg, connect a **10kΩ resistor** to **GND**
 
 ### How It Works
-| Condition | LDR Resistance | ADC Reading |
-|-----------|---------------|-------------|
-| Dark | ~1 MΩ | Low (~0–200) |
-| Bright | ~10 kΩ | High (~2000–4095) |
+| Condition | LDR Resistance | ADC Reading       |
+| --------- | -------------- | ----------------- |
+| Dark      | ~1 MΩ          | Low (~0–200)      |
+| Bright    | ~10 kΩ         | High (~2000–4095) |
 
 ---
 
@@ -115,13 +115,13 @@ Code enables internal pull-up resistors (`INPUT_PULLUP`), so:
 
 ### Button Pin Assignments
 | Button | GPIO | Suggested Function |
-|--------|------|-------------------|
-| BTN 1 | 4 | Mode Toggle |
-| BTN 2 | 13 | Calibrate |
-| BTN 3 | 15 | Manual Left |
-| BTN 4 | 16 | Manual Right |
-| BTN 5 | 17 | Reset / Center |
-| BTN 6 | 18 | Buzzer Mute |
+| ------ | ---- | ------------------ |
+| BTN 1  | 4    | Mode Toggle        |
+| BTN 2  | 13   | Calibrate          |
+| BTN 3  | 15   | Manual Left        |
+| BTN 4  | 16   | Manual Right       |
+| BTN 5  | 17   | Reset / Center     |
+| BTN 6  | 18   | Buzzer Mute        |
 
 ---
 
@@ -150,9 +150,9 @@ TP4056 OUT- ─────────────→ Common GND
 5. **Connect loads:** ESP32 VIN, Servo VCC to the switched 5V rail
 
 ### LED Indicators on TP4056
-| LED | Meaning |
-|-----|---------|
-| Red | Battery charging |
+| LED        | Meaning                      |
+| ---------- | ---------------------------- |
+| Red        | Battery charging             |
 | Blue/Green | Battery fully charged (4.2V) |
 
 ---
@@ -161,30 +161,32 @@ TP4056 OUT- ─────────────→ Common GND
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Breadboard                                              │
-│                                                          │
-│  [Solar Panel]                                           │
-│      │                                                   │
-│  [TP4056] ── OUT+ ──[Switch]── 5V Rail ──┐              │
-│      │                                    │              │
-│     GND ────────────────────────────── GND Rail          │
-│                                                          │
+│  Breadboard                                             │
+│                                                         │
+│  [Solar Panel]                                          │
+│      │                                                  │
+│  [TP4056] ── OUT+ ──[Switch]── 5V Rail ───┐             │
+│      │                                    │             │
+│     GND ────────────────────────────── GND Rail         │
+│                                                         │
 │  5V Rail ──→ Servo VCC (Red)                            │
 │  GND Rail ─→ Servo GND (Brown)                          │
-│                                                          │
-│  ESP32                                                   │
+│                                                         │
+│  ESP32                                                  │
 │  ├── GPIO 12 ──→ Servo Signal (Orange)                  │
-│  ├── GPIO 33 ──→ LDR Left divider midpoint              │
-│  ├── GPIO 34 ──→ LDR Right divider midpoint             │
-│  ├── GPIO 14 ──→ Buzzer (+)                             │
-│  ├── GPIO 21 ──→ OLED SDA                               │
-│  ├── GPIO 22 ──→ OLED SCL                               │
-│  ├── GPIO 4,13,15,16,17,18 ──→ Buttons                  │
+  │  ├── GPIO 34 ──→ LDR Left divider midpoint              │
+  │  ├── GPIO 35 ──→ LDR Right divider midpoint             │
+  │  ├── GPIO 14 ──→ Buzzer (+)                             │
+  │  ├── GPIO 21 ──→ OLED SDA                               │
+  │  ├── GPIO 22 ──→ OLED SCL                               │
+  │  ├── GPIO 4,18,19 ──→ Buttons                           │
+  │  ├── GPIO 13 ──→ Right Limiter (copper bar)             │
+  │  ├── GPIO 15 ──→ Left Limiter (copper bar)              │
 │  └── 3.3V ──→ LDR divider top, OLED VCC                 │
-│                                                          │
-│  LDR Left:  3.3V ──[LDR]──┬── GPIO 33 ──[10kΩ]── GND   │
-│  LDR Right: 3.3V ──[LDR]──┬── GPIO 34 ──[10kΩ]── GND   │
-│                                                          │
+│                                                         │
+  │  LDR Left:  3.3V ──[LDR]──┬── GPIO 34 ──[10kΩ]── GND    │
+  │  LDR Right: 3.3V ──[LDR]──┬── GPIO 35 ──[10kΩ]── GND    │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 

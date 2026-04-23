@@ -67,14 +67,16 @@ lib_deps =
 ### Step 3 — LDR Sensors
 1. Build two voltage dividers:
    ```
-   3.3V ──[LDR]──┬── GPIO 33 (Left)
+   3.3V ──[LDR]──┬── GPIO 34 (Left)
                  │
               [10kΩ]
                  │
                 GND
    ```
+
+2. Connect second LDR to **GPIO 35** (Right):
    ```
-   3.3V ──[LDR]──┬── GPIO 34 (Right)
+   3.3V ──[LDR]──┬── GPIO 35 (Right)
                  │
               [10kΩ]
                  │

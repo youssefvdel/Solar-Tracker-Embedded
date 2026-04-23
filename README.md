@@ -52,7 +52,7 @@ Full wiring reference is in [`docs/PINOUT.md`](docs/PINOUT.md).
 ### LDR Voltage Divider (x2)
 
 ```
-3.3V --[LDR]--+-- GPIO 33 (Left) or 34 (Right)
+3.3V --[LDR]--+-- GPIO 34 (Left) or 35 (Right)
               |
            [10k ohm]
               |
@@ -109,8 +109,8 @@ See [`docs/CALIBRATION.md`](docs/CALIBRATION.md)
 | Button           | Normal Mode          | Menu Mode         |
 | ---------------- | -------------------- | ----------------- |
 | LEFT (GPIO 4)    | Manual: rotate left  | Scroll up         |
-| RIGHT (GPIO 13)  | Manual: rotate right | Scroll down       |
-| SELECT (GPIO 15) | Open menu            | Confirm selection |
+| RIGHT (GPIO 19)  | Manual: rotate right | Scroll down       |
+| SELECT (GPIO 18) | Open menu            | Confirm selection |
 
 ### Main Menu
 

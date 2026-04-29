@@ -11,62 +11,62 @@
 // ============================================
 // PIN CONNECTIONS
 // ============================================
-const uint8_t PIN_SERVO = 12;
-const uint8_t PIN_LDR_LEFT = 34;
-const uint8_t PIN_LDR_RIGHT = 35;
-const uint8_t PIN_BUZZER = 14;
-const uint8_t PIN_OLED_SDA = 21;
-const uint8_t PIN_OLED_SCL = 22;
-const uint8_t PIN_BTN_LEFT = 4;
-const uint8_t PIN_BTN_SELECT = 18;
-const uint8_t PIN_BTN_RIGHT = 19;
-const uint8_t PIN_LEFT_LIMITER = 15;
-const uint8_t PIN_RIGHT_LIMITER = 13;
-const uint8_t PIN_BATTERY = 36;
+static constexpr uint8_t PIN_SERVO = 12;
+static constexpr uint8_t PIN_LDR_LEFT = 34;
+static constexpr uint8_t PIN_LDR_RIGHT = 35;
+static constexpr uint8_t PIN_BUZZER = 14;
+static constexpr uint8_t PIN_OLED_SDA = 21;
+static constexpr uint8_t PIN_OLED_SCL = 22;
+static constexpr uint8_t PIN_BTN_LEFT = 4;
+static constexpr uint8_t PIN_BTN_SELECT = 18;
+static constexpr uint8_t PIN_BTN_RIGHT = 19;
+static constexpr uint8_t PIN_LEFT_LIMITER = 15;
+static constexpr uint8_t PIN_RIGHT_LIMITER = 13;
+static constexpr uint8_t PIN_BATTERY = 36;
 
 // ============================================
 // DISPLAY SETTINGS
 // ============================================
-const uint8_t SCREEN_W = 128;
-const uint8_t SCREEN_H = 64;
-const uint8_t OLED_ADDR = 0x3C;
+static constexpr uint8_t SCREEN_W = 128;
+static constexpr uint8_t SCREEN_H = 64;
+static constexpr uint8_t OLED_ADDR = 0x3C;
 
 // ============================================
 // SERVO SETTINGS
 // ============================================
-const uint8_t SERVO_STOP = 90;
-const uint8_t SERVO_RIGHT = 0;
-const uint8_t SERVO_LEFT = 180;
-const uint8_t SERVO_WRAP_RIGHT = 45;   // slower wrap speed
-const uint8_t SERVO_WRAP_LEFT = 135;   // slower wrap speed
+static constexpr uint8_t SERVO_STOP = 90;
+static constexpr uint8_t SERVO_RIGHT = 0;
+static constexpr uint8_t SERVO_LEFT = 180;
+static constexpr uint8_t SERVO_WRAP_RIGHT = 45;
+static constexpr uint8_t SERVO_WRAP_LEFT = 135;
 
 // ============================================
 // LDR SETTINGS
 // ============================================
-const uint16_t LDR_SAMPLES = 128;      // ADC samples per reading
-const uint16_t LDR_DEADZONE = 200;     // Stop if diff < this
-const int16_t LDR_OFFSET = 0;          // Sensor calibration offset
-const int16_t LDR_HYSTERESIS = 80;     // Need this to reverse direction
-const uint8_t STUCK_THRESHOLD = 5;     // LDR cycles (~1s) stuck at limit before wrap
+static constexpr uint16_t LDR_SAMPLES = 128;
+static constexpr uint16_t LDR_DEADZONE = 200;
+static constexpr int16_t LDR_OFFSET = 0;
+static constexpr int16_t LDR_HYSTERESIS = 80;
+static constexpr uint8_t STUCK_THRESHOLD = 5;
 
 // ============================================
 // TIMING INTERVALS (ms)
 // ============================================
-const uint32_t TIME_LDR = 200;
-const uint32_t TIME_DISPLAY = 100;
-const uint32_t TIME_BUTTONS = 20;
-const uint32_t DEBOUNCE = 50;
+static constexpr uint32_t TIME_LDR = 200;
+static constexpr uint32_t TIME_DISPLAY = 100;
+static constexpr uint32_t TIME_BUTTONS = 20;
+static constexpr uint32_t DEBOUNCE = 50;
 
 // ============================================
 // POWER
 // ============================================
-const uint32_t IDLE_TIMEOUT_SEC = 30;    // Sleep after no servo movement for 30 sec
-const uint32_t WAKE_INTERVAL_SEC = 30;   // Wake every 30 sec to check
+static constexpr uint32_t IDLE_TIMEOUT_SEC = 30;
+static constexpr uint32_t WAKE_INTERVAL_SEC = 30;
 
 // ============================================
 // SERVO PULSE
 // ============================================
-const uint32_t SERVO_ON = 15;
+static constexpr uint32_t SERVO_ON = 15;
 
 // ============================================
 // GLOBAL OBJECTS
@@ -109,7 +109,7 @@ const MenuOption mainMenu[] = {
     {"Auto", setAutoMode},
     {"Manual", setManualMode},
     {"Sleep", enterSleepMode}};
-const uint8_t MENU_COUNT = 3;
+static constexpr uint8_t MENU_COUNT = 3;
 uint8_t menuPos = 0;
 const MenuOption *activeMenu = nullptr;
 
@@ -149,14 +149,14 @@ Button btn[3];
 // ============================================
 // BUZZER
 // ============================================
-const char BEEP_START[] = "101011";
-const char BEEP_SCROLL[] = "1";
-const char BEEP_SELECT[] = "101";
-const char BEEP_SLEEP[] = "10101000";
+static constexpr char BEEP_START[] = "10101101";
+static constexpr char BEEP_SCROLL[] = "1";
+static constexpr char BEEP_SELECT[] = "101";
+static constexpr char BEEP_SLEEP[] = "10101000";
 
 struct ToneGen
 {
-    const char *pattern = nullptr;
+    const char *pattern;
     uint8_t speed = 100;
     uint8_t index = 0;
     uint32_t tLast = 0;
@@ -209,8 +209,8 @@ void setup()
     if (!oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR))
     {
         Serial.println("OLED Error!");
-        while (1)
-            ;
+        while (1) {
+        }
     }
 
     trackerServo.attach(PIN_SERVO);
@@ -323,8 +323,7 @@ void loop()
             {
                 lastWrapLog = now;
                 Serial.printf("WRAP: state=%s leftL=%d rightL=%d\n",
-                              trackingState == WRAP_LEFT ? "LEFT" : "RIGHT",
-                              leftLimiter, rightLimiter);
+                              trackingState == WRAP_LEFT ? "LEFT" : "RIGHT",leftLimiter, rightLimiter);
             }
 
             if (trackingState == WRAP_LEFT)
@@ -333,10 +332,10 @@ void loop()
                 {
                     trackerServo.write(SERVO_STOP);
                     trackingState = NORMAL;
-                    escapeSteps = 3;  // 3 steps to the right to move off the bar
+                    escapeSteps = 5;  // 5 steps to the right to move off the bar
                     stuckCounter = 0;
                     lastDirection = false;
-                    Serial.println("WRAP TO LEFT DONE — ESCAPE RIGHT x3");
+                    Serial.println("WRAP TO LEFT DONE — ESCAPE RIGHT x5");
                 }
                 else
                 {
@@ -349,10 +348,10 @@ void loop()
                 {
                     trackerServo.write(SERVO_STOP);
                     trackingState = NORMAL;
-                    escapeSteps = -3;  // 3 steps to the left to move off the bar
+                    escapeSteps = -5;  // 5 steps to the left to move off the bar
                     stuckCounter = 0;
                     lastDirection = true;
-                    Serial.println("WRAP TO RIGHT DONE — ESCAPE LEFT x3");
+                    Serial.println("WRAP TO RIGHT DONE — ESCAPE LEFT x5");
                 }
                 else
                 {
@@ -362,13 +361,13 @@ void loop()
         }
     }
 
-    // Idle sleep: no servo movement for 30 sec → sleep
-    if (currentMode == AUTO && trackingState == NORMAL && escapeSteps == 0 &&
-        (now - tLastMove) >= (IDLE_TIMEOUT_SEC * 1000UL))
-    {
-        Serial.println("Idle timeout — sleeping");
-        sleepMode();
-    }
+    // Auto sleep removed — was causing resets and timing issues
+    // if (currentMode == AUTO && trackingState == NORMAL && escapeSteps == 0 &&
+    //     (now - tLastMove) >= (IDLE_TIMEOUT_SEC * 1000UL))
+    // {
+    //     Serial.println("Idle timeout — sleeping");
+    //     sleepMode();
+    // }
 
     // Update display
     if (now - tDisplay >= TIME_DISPLAY)
@@ -383,21 +382,8 @@ void loop()
 // ============================================
 void readSensors()
 {
-    uint16_t rawL = readSensor(PIN_LDR_LEFT);
-    uint16_t rawR = readSensor(PIN_LDR_RIGHT);
-
-    bufL[bufIdx] = rawL;
-    bufR[bufIdx] = rawR;
-    bufIdx = (bufIdx + 1) % 5;
-
-    uint32_t sumL = 0, sumR = 0;
-    for (uint8_t i = 0; i < 5; i++)
-    {
-        sumL += bufL[i];
-        sumR += bufR[i];
-    }
-    ldrL = sumL / 5;
-    ldrR = sumR / 5;
+    ldrL = readSensor(PIN_LDR_LEFT);
+    ldrR = readSensor(PIN_LDR_RIGHT);
 }
 
 uint16_t readSensor(uint8_t pin)
@@ -410,13 +396,33 @@ uint16_t readSensor(uint8_t pin)
     return total / LDR_SAMPLES;
 }
 
+// Battery lookup table: voltage (tenths of a volt above 3.2V) → percentage
+// Index 0 = 3.2V, Index 10 = 4.2V
+static constexpr uint8_t BATT_LUT[] = {0, 5, 15, 30, 45, 55, 65, 75, 85, 95, 100};
+
+uint8_t voltageToPercent(float volts)
+{
+    if (volts >= 4.2f)
+        return 100;
+    if (volts <= 3.2f)
+        return 0;
+
+    int idx = (int)((volts - 3.2f) * 10.0f);
+    idx = constrain(idx, 0, 9);
+
+    float frac = (volts - 3.2f - (idx * 0.1f)) * 10.0f;
+    uint8_t low = BATT_LUT[idx];
+    uint8_t high = BATT_LUT[idx + 1];
+
+    return low + (uint8_t)((high - low) * frac);
+}
+
 void updateBattery()
 {
     uint16_t raw = analogRead(PIN_BATTERY);
     float volts = (raw / 4095.0f) * 3.3f * 2.0f;
-    int pct = (int)((volts - 3.0f) * 100.0f / 1.2f);
-    battery = constrain(pct, 0, 100);
-    Serial.printf("Bat: %u%%\n", battery);
+    battery = voltageToPercent(volts);
+    Serial.printf("Bat: %.2fV %u%%\n", volts, battery);
 }
 
 // ============================================
@@ -680,8 +686,7 @@ void showDisplay()
 
     if (menuState == NO_MENU)
     {
-        const char *modeStr = (currentMode == AUTO) ? "AUTO" : (currentMode == MANUAL) ? "MAN"
-                                                                                       : "STBY";
+        const char *modeStr = (currentMode == AUTO) ? "AUTO" : (currentMode == MANUAL) ? "MAN" : "STBY";
         oled.setCursor(0, 0);
         oled.print(modeStr);
 

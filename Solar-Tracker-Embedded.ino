@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * Solar Tracker Embedded
+ * Solar Tracker Embedded  v1.0.0
  * ============================================================================
  *
  * Dual-axis solar tracker firmware for ESP32 with 360° continuous servo,
@@ -84,6 +84,7 @@ static constexpr uint8_t  PIN_BUZZ = 14;
 // TUNABLE CONSTANTS — change behaviour without touching logic
 // ============================================================================
 
+static constexpr const char* VERSION = "1.0.0";
 static constexpr int   LDR_THRESH        = 100;     // LDR diff to trigger tracking
 static constexpr int   IDLE_MS           = 30000;   // AUTO → SLEEP after this idle
 static constexpr int   SLEEP_CHECK_MS    = 30000;   // wake interval to poll LDRs

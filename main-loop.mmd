@@ -1,0 +1,52 @@
+%% Solar Tracker — Main Loop Flow
+%% Paste into https://mermaid.live/
+
+flowchart TD
+    START([Start]) --> LOOP{"Main Loop"}
+    
+    LOOP --> BUZZ[Update Buzzer]
+    LOOP --> SERVO_STOP[Check Servo Timer]
+    LOOP --> LIMIT[Read Limiters]
+    LOOP --> LDR[Read LDRs]
+    LOOP --> BTN[Check Buttons]
+    LOOP --> AUTO["Auto Tracking?"]
+    LOOP --> DISP[Update Display]
+    
+    AUTO -->|NO| LOOP
+    AUTO -->|YES| TRACK{"trackingState"}
+    
+    TRACK -->|NORMAL| ESC{"escapeSteps?"}
+    ESC -->|gt 0| DO_ESC[Escape Pulse]
+    ESC -->|eq 0| LOGIC[trackingLogic]
+    
+    LOGIC --> CTR{"abs(diff) < 200?"}
+    CTR -->|YES| STOP[Stop Servo]
+    CTR -->|NO| LIM_CHK{"At Limit?"}
+    
+    LIM_CHK -->|NO| HYST{"Dir Changed?"}
+    LIM_CHK -->|YES| STUCK{"Stuck 5x?"}
+    
+    STUCK -->|NO| STOP2[Stop and Block Dir]
+    STUCK -->|YES| SET_WRAP[Set WRAP Mode]
+    
+    HYST -->|YES| STOP3[Stop]
+    HYST -->|NO| DO_PULSE[Pulse Toward Light]
+    
+    TRACK -->|WRAP_LEFT| WL{"leftLimit?"}
+    WL -->|NO| ROT_L[Rotate Left]
+    WL -->|YES| SET_ESC_L[Set Escape Right]
+    
+    TRACK -->|WRAP_RIGHT| WR{"rightLimit?"}
+    WR -->|NO| ROT_R[Rotate Right]
+    WR -->|YES| SET_ESC_R[Set Escape Left]
+    
+    DO_ESC --> LOOP
+    DO_PULSE --> LOOP
+    STOP --> LOOP
+    STOP2 --> LOOP
+    STOP3 --> LOOP
+    SET_WRAP --> LOOP
+    ROT_L --> LOOP
+    ROT_R --> LOOP
+    SET_ESC_L --> LOOP
+    SET_ESC_R --> LOOP

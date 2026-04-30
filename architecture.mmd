@@ -1,0 +1,48 @@
+%% Solar Tracker — System Architecture
+%% Paste into https://mermaid.live/
+
+flowchart TB
+    subgraph INPUT["INPUT LAYER"]
+        LDR_L["LDR Left GPIO 34"]
+        LDR_R["LDR Right GPIO 35"]
+        LIM_L["Limit Left GPIO 15"]
+        LIM_R["Limit Right GPIO 13"]
+    end
+
+    subgraph LOGIC["LOGIC LAYER"]
+        READ["Read Sensors Every 200ms"]
+        CTR["Centered? abs(diff) < 200"]
+        LIM["At Limit? + Stuck 5x"]
+        NORMAL["NORMAL Pulse 15ms"]
+        WRAP["WRAP Continuous"]
+        ESCAPE["ESCAPE 5 Pulses"]
+    end
+
+    subgraph OUTPUT["OUTPUT LAYER"]
+        SERVO["Servo GPIO 12"]
+        OLED["OLED I2C"]
+        BUZZ["Buzzer GPIO 14"]
+        SER["Serial 115200"]
+    end
+
+    subgraph UI["UI LAYER"]
+        BTN_L["LEFT GPIO 4"]
+        BTN_R["RIGHT GPIO 19"]
+        BTN_S["SELECT GPIO 18"]
+        MODE_A["AUTO"]
+        MODE_M["MANUAL"]
+        MODE_S["SLEEP"]
+    end
+
+    INPUT --> LOGIC
+    UI --> LOGIC
+    LOGIC --> OUTPUT
+
+    READ --> CTR
+    CTR -->|YES| NORMAL
+    CTR -->|NO| LIM
+    LIM -->|NO| NORMAL
+    LIM -->|YES| WRAP
+    WRAP --> ESCAPE
+    ESCAPE --> NORMAL
+    NORMAL --> READ

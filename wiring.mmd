@@ -1,0 +1,34 @@
+%% Solar Tracker — Component Wiring
+%% Paste into https://mermaid.live/
+
+flowchart LR
+    subgraph ESP32["ESP32 Dev Board"]
+        G4["GPIO 4"]
+        G12["GPIO 12"]
+        G13["GPIO 13"]
+        G14["GPIO 14"]
+        G15["GPIO 15"]
+        G18["GPIO 18"]
+        G19["GPIO 19"]
+        G21["GPIO 21"]
+        G22["GPIO 22"]
+        G34["GPIO 34"]
+        G35["GPIO 35"]
+        G36["GPIO 36"]
+    end
+
+    G4 --> BTN_L[Button LEFT]
+    G19 --> BTN_R[Button RIGHT]
+    G18 --> BTN_S[Button SELECT]
+    
+    G12 --> SERVO[Servo Signal]
+    G13 --> LIM_R[Limit Right]
+    G15 --> LIM_L[Limit Left]
+    
+    G14 --> BUZZ[Buzzer]
+    G21 --> OLED_SDA[OLED SDA]
+    G22 --> OLED_SCL[OLED SCL]
+    
+    G34 --> LDR_L[LDR Left]
+    G35 --> LDR_R[LDR Right]
+    G36 --> BATT[Battery Sense]

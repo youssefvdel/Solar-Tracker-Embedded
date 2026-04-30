@@ -46,8 +46,8 @@ static constexpr int WRAP_ESCAPE_PULSES = 5;
 static constexpr int WRAP_ESCAPE_MS = 10;
 static constexpr int LDR_SAMPLES = 1024;
 static constexpr int BT_TELEM_MS = 1000;
-static constexpr float BATT_DIVIDER = 2.0f;   // voltage divider ratio
-static constexpr float BATT_V_MAX = 4.2f;     // battery full
+static constexpr float BATT_DIVIDER = 2.30f;  // voltage divider ratio
+static constexpr float BATT_V_MAX = 4.1f;     // battery full
 static constexpr float BATT_V_MIN = 3.35f;    // battery empty
 
 BluetoothSerial SerialBT;

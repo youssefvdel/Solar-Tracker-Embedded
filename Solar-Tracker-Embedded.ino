@@ -12,7 +12,6 @@
  *   SLEEP  - light sleep with periodic LDR checks and button wake
  *   WRAP   - internal; unwinds from stuck-limit condition
  *
- * Author  : Youssef
  * Board   : ESP32 Dev Module (DOIT / NodeMCU-32S)
  * Servo   : 360° continuous rotation
  * Display : SSD1306 128x64 I2C OLED
